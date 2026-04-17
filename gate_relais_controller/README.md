@@ -10,6 +10,7 @@ ESP32-C3 based 2-channel relay controller for a driveway gate. It supports two p
 - Relay Logic: Active LOW (LOW = ON, HIGH = OFF)
 
 ## Features
+- Non-blocking architecture (no `delay()` used during normal loop).
 - MQTT command control and status feedback.
 - Configurable delay for automatic gate stopping (13s for walk, 38s for car).
 - Telnet control (Port 2323) for remote debugging.
@@ -65,4 +66,5 @@ mqtt:
 Update Wi-Fi and MQTT credentials in the source code before flashing.
 
 ## Changelog
-- **v1.1**: Initial version with single and double (delayed fix) commands. *Note: Uses blocking delays for relay pulses.*
+- **v1.2**: Replaced blocking `delay()` with millis-based pulse struct baceua of unwanted behaviours, enabled `WiFi.setSleep(false)` to fix unexpected disconnects, cleaned up serial logging.
+- **v1.1**: Initial version.

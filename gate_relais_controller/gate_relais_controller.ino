@@ -19,13 +19,13 @@ const char* TSTATUS = "tor/relais/status";
 const char* TLASTACTION = "tor/relais/lastaction";
 
 // --- Hardware ---
-#define RELAY_CH1 6  // GPIO6 Walk-Position
-#define RELAY_CH2 7  // GPIO7 Car-Position
+#define RELAY_CH1 6
+#define RELAY_CH2 7
 
 // Relay Timing
-const uint16_t PULSE_MS = 500;           // 500ms pulse
-const uint16_t DELAY_MS_WALK_FIX = 13000; // 13s for Walk-Position fix
-const uint16_t DELAY_MS_CAR_FIX = 38000;  // 38s for Car-Position fix
+const uint16_t PULSE_MS = 500;
+const uint16_t DELAY_MS_WALK_FIX = 13000;
+const uint16_t DELAY_MS_CAR_FIX = 38000;
 
 // Relay Logic
 #define RELAY_ON LOW
@@ -39,16 +39,22 @@ unsigned long lastReconnectAttempt = 0;
 const unsigned long reconnectInterval = 5000;
 bool statusPublishedOnline = false;
 
-// State Machine
+// --- State Machine ---
 enum RelayState {
   IDLE,
   CH1_WAIT_FIX,
   CH2_WAIT_FIX
 };
-
 RelayState relayState = IDLE;
 unsigned long stateStartTime = 0;
 uint16_t currentDelayMs = 0;
+
+// --- Non-blocking Pulse struct ---
+struct Pulse {
+  uint8_t pin = 0;
+  unsigned long startTime = 0;
+  bool active = false;
+} pulse;
 
 void setup_wifi() {
   delay(10);
@@ -58,6 +64,7 @@ void setup_wifi() {
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
+  WiFi.setSleep(false); // Fixes disconnects
 
   uint8_t attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < 60) {
@@ -78,18 +85,12 @@ void setup_wifi() {
 void setupOTA() {
   ArduinoOTA.setHostname("tor-relais-esp32c3");
   ArduinoOTA.onStart([]() {
-    Serial.println("Starting OTA Update...");
-    TelnetStream.println("Starting OTA Update...");
+    Serial.println("OTA Start...");
+    TelnetStream.println("OTA Start...");
   });
   ArduinoOTA.onEnd([]() {
-    Serial.println("\nOTA Update finished!");
-    TelnetStream.println("OTA Update finished!");
-  });
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    char buf[64];
-    snprintf(buf, sizeof(buf), "OTA Progress: %u%%", (progress / (total / 100)));
-    Serial.println(buf);
-    TelnetStream.println(buf);
+    Serial.println("\nOTA finished!");
+    TelnetStream.println("OTA finished!");
   });
   ArduinoOTA.onError([](ota_error_t error) {
     char buf[64];
@@ -98,69 +99,6 @@ void setupOTA() {
     TelnetStream.println(buf);
   });
   ArduinoOTA.begin();
-}
-
-void pulseRelay(uint8_t pin, const char* channelName) {
-  char log[80];
-  snprintf(log, sizeof(log), "Switching %s for %dms", channelName, PULSE_MS);
-  Serial.println(log);
-  TelnetStream.println(log);
-
-  digitalWrite(pin, RELAY_ON);
-  delay(PULSE_MS); // Blocking delay!
-  digitalWrite(pin, RELAY_OFF);
-}
-
-void cancelPendingOperation() {
-  if (relayState != IDLE) {
-    char log[100];
-    snprintf(log, sizeof(log), "Wait operation cancelled, was in state %d", relayState);
-    Serial.println(log);
-    TelnetStream.println(log);
-    mqtt.publish(TLASTACTION, "Wait operation cancelled", true);
-    relayState = IDLE;
-  }
-}
-
-void executeCommand(const char* cmd) {
-  char logMsg[100];
-  
-  cancelPendingOperation();
-
-  if (strcmp(cmd, "ch1single") == 0) {
-    pulseRelay(RELAY_CH1, "Walk-Position");
-    snprintf(logMsg, sizeof(logMsg), "Walk-Position triggered");
-    relayState = IDLE;
-  } 
-  else if (strcmp(cmd, "ch2single") == 0) {
-    pulseRelay(RELAY_CH2, "Car-Position");
-    snprintf(logMsg, sizeof(logMsg), "Car-Position triggered");
-    relayState = IDLE;
-  } 
-  else if (strcmp(cmd, "ch1double") == 0) {
-    pulseRelay(RELAY_CH1, "Walk-Position (Wait for fix)");
-    relayState = CH1_WAIT_FIX;
-    stateStartTime = millis();
-    currentDelayMs = DELAY_MS_WALK_FIX;
-    snprintf(logMsg, sizeof(logMsg), "Walk-Position triggered, waiting %ds for fix", DELAY_MS_WALK_FIX / 1000);
-  } 
-  else if (strcmp(cmd, "ch2double") == 0) {
-    pulseRelay(RELAY_CH2, "Car-Position (Wait for fix)");
-    relayState = CH2_WAIT_FIX;
-    stateStartTime = millis();
-    currentDelayMs = DELAY_MS_CAR_FIX;
-    snprintf(logMsg, sizeof(logMsg), "Car-Position triggered, waiting %ds for fix", DELAY_MS_CAR_FIX / 1000);
-  } 
-  else {
-    snprintf(logMsg, sizeof(logMsg), "Unknown command: %s", cmd);
-    Serial.println(logMsg);
-    TelnetStream.println(logMsg);
-    return;
-  }
-
-  mqtt.publish(TLASTACTION, logMsg, true);
-  Serial.println(logMsg);
-  TelnetStream.println(logMsg);
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -185,26 +123,63 @@ bool mqttReconnect() {
 
   String clientId = String("ESP32C3-relais-") + String((uint32_t)ESP.getEfuseMac(), HEX);
 
-  const char* willTopic = TSTATUS;
-  const char* willMessage = "offline";
-  int willQos = 1;
-  bool willRetain = true;
-
-  bool ok = mqtt.connect(clientId.c_str(), mqtt_user, mqtt_pass, willTopic, willQos, willRetain, willMessage);
-  
+  bool ok = mqtt.connect(clientId.c_str(), mqtt_user, mqtt_pass, TSTATUS, 1, true, "offline");
   if (ok) {
     Serial.println("Connected");
     TelnetStream.println("Connected");
     mqtt.publish(TSTATUS, "online", true);
     statusPublishedOnline = true;
     mqtt.subscribe(TCMD);
-    Serial.print("Subscribed to ");
-    Serial.println(TCMD);
   } else {
     Serial.print("Error, rc=");
     Serial.println(mqtt.state());
   }
   return ok;
+}
+
+// --- Pulse Logic ---
+void startPulse(uint8_t pin) {
+  digitalWrite(pin, RELAY_ON);
+  pulse.pin = pin;
+  pulse.startTime = millis();
+  pulse.active = true;
+}
+
+void checkPulse() {
+  if (pulse.active && millis() - pulse.startTime >= PULSE_MS) {
+    digitalWrite(pulse.pin, RELAY_OFF);
+    pulse.active = false;
+  }
+}
+
+void executeCommand(const char* cmd) {
+  relayState = IDLE; // cancel pending
+
+  if (strcmp(cmd, "ch1single") == 0) {
+    startPulse(RELAY_CH1);
+    mqtt.publish(TLASTACTION, "Walk-Position single", true);
+  } 
+  else if (strcmp(cmd, "ch2single") == 0) {
+    startPulse(RELAY_CH2);
+    mqtt.publish(TLASTACTION, "Car-Position single", true);
+  } 
+  else if (strcmp(cmd, "ch1double") == 0) {
+    startPulse(RELAY_CH1);
+    relayState = CH1_WAIT_FIX;
+    stateStartTime = millis();
+    currentDelayMs = DELAY_MS_WALK_FIX;
+    mqtt.publish(TLASTACTION, "Walk-Position waiting for fix", true);
+  } 
+  else if (strcmp(cmd, "ch2double") == 0) {
+    startPulse(RELAY_CH2);
+    relayState = CH2_WAIT_FIX;
+    stateStartTime = millis();
+    currentDelayMs = DELAY_MS_CAR_FIX;
+    mqtt.publish(TLASTACTION, "Car-Position waiting for fix", true);
+  } 
+  else {
+    mqtt.publish(TLASTACTION, "Unknown command", true);
+  }
 }
 
 void setup() {
@@ -220,13 +195,6 @@ void setup() {
   setup_wifi();
 
   TelnetStream.begin(2323);
-  TelnetStream.println("Telnet ready on port 2323");
-  TelnetStream.println("Commands:");
-  TelnetStream.println("1: Walk-Position single");
-  TelnetStream.println("2: Car-Position single");
-  TelnetStream.println("3: Walk-Position fix (13s)");
-  TelnetStream.println("4: Car-Position fix (38s)");
-
   mqtt.setServer(mqtt_server, mqtt_port);
   mqtt.setCallback(mqttCallback);
 
@@ -252,21 +220,18 @@ void loop() {
     mqtt.loop();
   }
 
+  checkPulse();
+
   if (relayState != IDLE) {
-    unsigned long elapsed = millis() - stateStartTime;
-    
-    if (relayState == CH1_WAIT_FIX && elapsed >= DELAY_MS_WALK_FIX) {
-      pulseRelay(RELAY_CH1, "Walk-Position Fix");
-      mqtt.publish(TLASTACTION, "Walk-Position fixed", true);
-      Serial.println("Walk-Position fixed");
-      TelnetStream.println("Walk-Position fixed");
-      relayState = IDLE;
-    } 
-    else if (relayState == CH2_WAIT_FIX && elapsed >= DELAY_MS_CAR_FIX) {
-      pulseRelay(RELAY_CH2, "Car-Position Fix");
-      mqtt.publish(TLASTACTION, "Car-Position fixed", true);
-      Serial.println("Car-Position fixed");
-      TelnetStream.println("Car-Position fixed");
+    if (millis() - stateStartTime >= currentDelayMs) {
+      if (relayState == CH1_WAIT_FIX) {
+        startPulse(RELAY_CH1);
+        mqtt.publish(TLASTACTION, "Walk-Position fixed", true);
+      } 
+      else if (relayState == CH2_WAIT_FIX) {
+        startPulse(RELAY_CH2);
+        mqtt.publish(TLASTACTION, "Car-Position fixed", true);
+      }
       relayState = IDLE;
     }
   }
