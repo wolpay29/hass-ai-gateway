@@ -9,13 +9,16 @@ The sensor measures pulses per second. No conversion to mass flow or volume flow
 - Sensor: Hall effect flow sensor on GPIO4 / D2
 
 ## Features
-- 90-second ring buffer for historical data.
-- Calculates moving average and standard deviation (90s & 10s).
-- Calculates trend rates (% change) using exponential smoothing.
+- 90-second ring buffer for moving averages and standard deviations.
+- Trend rate calculations (% change) using exponential smoothing.
+- Remote debugging output over Wi-Fi using TelnetStream (Port 2323).
+- Improved non-blocking Wi-Fi and MQTT reconnect logic.
+- MQTT Last Will and Testament (LWT) for online/offline device tracking.
 - OTA update support.
 
 ## MQTT
-Measurements are published every 10 seconds.
+Topics published by the device:
+- `pool/flow/status` : Device status (`online` / `offline`) via LWT
 - `pool/flow/avg` : Moving average (90s)
 - `pool/flow/stddev` : Standard deviation (90s)
 - `pool/flow/stddev_10s` : Short-term standard deviation (10s)
@@ -30,33 +33,40 @@ mqtt:
       state_topic: "pool/flow/avg"
       unit_of_measurement: "p/s"
       value_template: "{{ value }}"
+      availability_topic: "pool/flow/status"
     - name: "Pool Flow StdDev"
       state_topic: "pool/flow/stddev"
       unit_of_measurement: "p/s"
       value_template: "{{ value }}"
+      availability_topic: "pool/flow/status"
     - name: "Pool Flow StdDev 10s"
       state_topic: "pool/flow/stddev_10s"
       unit_of_measurement: "p/s"
       value_template: "{{ value }}"
+      availability_topic: "pool/flow/status"
     - name: "Pool Flow Avg Trend"
       state_topic: "pool/flow/avg_trend"
       unit_of_measurement: "%"
       value_template: "{{ value }}"
+      availability_topic: "pool/flow/status"
     - name: "Pool Flow StdDev Trend"
       state_topic: "pool/flow/stddev_trend"
       unit_of_measurement: "%"
       value_template: "{{ value }}"
+      availability_topic: "pool/flow/status"
 ```
 
 ## Requirements
 - `ESP8266WiFi` (included in board package)
 - `ArduinoOTA` (included in board package)
 - `PubSubClient` (install via Library Manager)
+- `TelnetStream` (install via Library Manager)
 
 ## Setup
 Update Wi-Fi and MQTT credentials in the source code before flashing.
 
 ## Changelog
-- **v1.2**: Increased buffer to 90s, added exponential smoothing trend calculations for average and stddev.
-- **v1.1**: Switched to 60s ring buffer, added standard deviation calculations.
+- **v1.3**: Added TelnetStream for network debugging, implemented MQTT Last will testament LWT (online/offline status), improved reconnect logic.
+- **v1.2**: Increased buffer to 90s, added trend calculations.
+- **v1.1**: Switched to 60s buffer, added standard deviation calculations.
 - **v1.0**: Initial version with basic 5-value moving average.
