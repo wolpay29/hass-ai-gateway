@@ -25,6 +25,8 @@ from telegram.ext import (
     filters,
 )
 
+from bot.handlers import handle_voice
+
 # Load config from .env file
 load_dotenv()
 
@@ -413,6 +415,8 @@ def main():
             pattern=r"^(battery_heat_pool|battery_ignore)$",
         )
     )
+
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
     job_queue = app.job_queue
     if job_queue:

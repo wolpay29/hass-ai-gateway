@@ -31,3 +31,6 @@ telegram_bot_env/
 # OS
 .DS_Store
 Thumbs.db
+
+#Whisper
+data/voice/
