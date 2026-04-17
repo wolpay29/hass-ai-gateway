@@ -6,7 +6,7 @@ The sensor measures environmental data every 30 seconds and publishes it via MQT
 
 ## Hardware
 - Board: ESP8266 (Wemos D1 mini)
-- Sensor: DHT22 on GPIO2 / D4
+- Sensor: DHT22 on GPIO4 / D2 (Moved from D4 for stability)
 
 ## Features
 - Temperature and humidity measurement.
@@ -14,6 +14,8 @@ The sensor measures environmental data every 30 seconds and publishes it via MQT
 - Remote debugging over Wi-Fi using TelnetStream (Port 2323, type 'r' for manual read).
 - MQTT Last Will and Testament (LWT) for online/offline tracking.
 - Retained MQTT messages so Home Assistant receives the last state immediately.
+- Auto-recovery for DHT sensor reads.
+- Non-blocking delays and reconnect logic.
 - OTA update support.
 
 ## MQTT
@@ -49,4 +51,5 @@ mqtt:
 Update Wi-Fi and MQTT credentials in the source code before flashing.
 
 ## Changelog
+- **v1.2**: Improved stability, moved DHT to D2/GPIO4, added auto-recovery for DHT NaN errors, optimized non-blocking timing.
 - **v1.0**: Initial version.
