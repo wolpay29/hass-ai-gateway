@@ -66,5 +66,5 @@ mqtt:
 Update Wi-Fi and MQTT credentials in the source code before flashing.
 
 ## Changelog
-- **v1.2**: Replaced blocking `delay()` with millis-based pulse struct baceua of unwanted behaviours, enabled `WiFi.setSleep(false)` to fix unexpected disconnects, cleaned up serial logging.
+- **v1.2**: Replaced blocking `delay()` with millis-based pulse struct to prevent unwanted behaviour with OTA,MQTT,other controls,... , enabled `WiFi.setSleep(false)` to fix unexpected disconnects, cleaned up serial logging.
 - **v1.1**: Initial version.
