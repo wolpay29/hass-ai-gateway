@@ -140,8 +140,10 @@ VOICE_REPLY_WITH_TRANSCRIPT=true
 
 ## Changelog
 
-### Unreleased
+## Changelog
 
-- Added voice-message transcription with Faster Whisper.
-- Added Whisper settings in `.env` (`WHISPER_MODEL`, `WHISPER_DEVICE`, `WHISPER_COMPUTE_TYPE`).
-- Added optional transcript replies and configurable voice download folder.
+### v0.2.0 (2026-04-17)
+
+- Added voice message transcription with Faster Whisper
+- Added Whisper runtime config via .env
+- Added optional transcript replies and voice download dir
