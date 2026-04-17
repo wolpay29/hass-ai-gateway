@@ -9,17 +9,18 @@ The sensor measures pulses per second. No conversion to mass flow or volume flow
 - Sensor: Hall effect flow sensor on GPIO4 / D2
 
 ## Features
-- Pulse counting by interrupt.
-- 60-second ring buffer for historical data.
-- Calculates moving average (60s).
-- Calculates standard deviation (60s) and short-term standard deviation (10s).
+- 90-second ring buffer for historical data.
+- Calculates moving average and standard deviation (90s & 10s).
+- Calculates trend rates (% change) using exponential smoothing.
 - OTA update support.
 
 ## MQTT
 Measurements are published every 10 seconds.
-- `pool/flow/avg` : Moving average (60s)
-- `pool/flow/stddev` : Standard deviation (60s)
+- `pool/flow/avg` : Moving average (90s)
+- `pool/flow/stddev` : Standard deviation (90s)
 - `pool/flow/stddev_10s` : Short-term standard deviation (10s)
+- `pool/flow/avg_trend` : Trend rate of average flow (%)
+- `pool/flow/stddev_trend` : Trend rate of standard deviation (%)
 
 ## Home Assistant
 ```yaml
@@ -37,6 +38,14 @@ mqtt:
       state_topic: "pool/flow/stddev_10s"
       unit_of_measurement: "p/s"
       value_template: "{{ value }}"
+    - name: "Pool Flow Avg Trend"
+      state_topic: "pool/flow/avg_trend"
+      unit_of_measurement: "%"
+      value_template: "{{ value }}"
+    - name: "Pool Flow StdDev Trend"
+      state_topic: "pool/flow/stddev_trend"
+      unit_of_measurement: "%"
+      value_template: "{{ value }}"
 ```
 
 ## Requirements
@@ -48,5 +57,6 @@ mqtt:
 Update Wi-Fi and MQTT credentials in the source code before flashing.
 
 ## Changelog
-- **v1.1**: Switched to 60s ring buffer, added standard deviation over 60s and 10s, split data into multiple MQTT topics.
+- **v1.2**: Increased buffer to 90s, added exponential smoothing trend calculations for average and stddev.
+- **v1.1**: Switched to 60s ring buffer, added standard deviation calculations.
 - **v1.0**: Initial version with basic 5-value moving average.

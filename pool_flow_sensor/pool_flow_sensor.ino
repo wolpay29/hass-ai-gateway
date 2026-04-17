@@ -15,9 +15,12 @@ const char* mqtt_pass = "MQTT_PASSWORD";
 const char* mqtt_topic_avg = "pool/flow/avg";
 const char* mqtt_topic_stddev = "pool/flow/stddev";
 const char* mqtt_topic_stddev_10s = "pool/flow/stddev_10s";
+//new topics for trend values
+const char* mqtt_topic_avg_trend = "pool/flow/avg_trend";
+const char* mqtt_topic_stddev_trend = "pool/flow/stddev_trend";
 
 //GPIO
-#define FLOW_PIN 4  // D2 auf NodeMCU
+#define FLOW_PIN 4  // D2 on NodeMCU
 
 volatile unsigned long pulseCount = 0;
 
@@ -56,14 +59,21 @@ void reconnect() {
 }
 
 //circlebuffer
-#define BUFFER_SIZE 60                              //buffersize
+#define BUFFER_SIZE 90                              //buffersize (90s)
 float pulseBuffer[BUFFER_SIZE];                     //array for measurement values
 int bufferIndex = 0;                                //act pos in buffer
 bool bufferFilled = false;                          //buffer filled flag
 
 //timecontrol
-unsigned long lastMeasurement = 0;                  //time of the las 1s intervall measurment
+unsigned long lastMeasurement = 0;                  //time of the last 1s intervall measurment
 unsigned long lastPublish = 0;                      //time of the last 10s intervall publish
+
+//trend calculation variables
+float lastAvg = 0;
+float lastStdDev = 0;
+float avgTrend = 0;                                 //filtered change rate of the flow
+float stdDevTrend = 0;                              //filtered change rate of the standard deviation
+const float trendAlpha = 0.4;                       //smoothing factor (0.1-0.3)
 
 void setup() {
   Serial.begin(115200);
@@ -93,7 +103,7 @@ void loop() {
 
   unsigned long now = millis();                     //act time
 
-  //count every 1s detected pusles
+  //count every 1s detected pulses
   if (now - lastMeasurement >= 1000) {              //if 1s intervall reached
     lastMeasurement = now;                          //save time
 
@@ -105,39 +115,37 @@ void loop() {
 
     float pulses_per_s = (float)pulses;             //to float
 
-    //save values in circel buffer (rolling)
+    //save values in circle buffer (rolling)
     pulseBuffer[bufferIndex] = pulses_per_s;        //save measurement
     bufferIndex = (bufferIndex + 1) % BUFFER_SIZE;  //shift index
     if (bufferIndex == 0) bufferFilled = true;      //buffer filled
   }
 
-  //publish all 10s AVG and standard deviation
+  //publish all 10s
   if (now - lastPublish >= 10000) {                 
-    lastPublish = now;                       
+    lastPublish = now;                              
 
-    int count = bufferFilled ? BUFFER_SIZE : bufferIndex; //chekc
+    int count = bufferFilled ? BUFFER_SIZE : bufferIndex; //check
     if (count == 0) return;                         //no data -> no publish
 
-    //(Moving Average)
+    // 1. calc Moving Average
     float sum = 0;
     for (int i = 0; i < count; i++) sum += pulseBuffer[i];
-    float avg = sum / count;                        //avrage
+    float avg = sum / count;                        //average
 
-
-    //standard deviation
+    // 2. calc standard deviation
     float variance = 0;
     for (int i = 0; i < count; i++)
-      variance += pow(pulseBuffer[i] - avg, 2);     //quare deviation of the average
+      variance += pow(pulseBuffer[i] - avg, 2);     //square deviation of the average
     variance /= count;                              //average
     float stddev = sqrt(variance);                  //root = standard deviation
 
-
-
-    //standard deviation over 10s
+    // 3. calc standard deviation over 10s
     // --- calc 10s average and variance (last 10 values in buffer) ---
     int shortCount = min(count, 10);  // Max. 10 values
     //index of last saved value
     int startIndex = (bufferIndex - shortCount + BUFFER_SIZE) % BUFFER_SIZE;
+    
     //average
     float shortSum = 0;
     for (int i = 0; i < shortCount; i++) {
@@ -154,26 +162,52 @@ void loop() {
     shortVariance /= shortCount;
     float shortStdDev = sqrt(shortVariance);
 
+    // 4. calc trend (smoothed change rates)
+    if (lastAvg > 0) { // avoid division by zero on first run
+      // calc raw change (percentage change since last measurement)
+      float rawAvgTrend = (avg - lastAvg) / lastAvg;
+      float rawStdDevTrend = (stddev - lastStdDev) / lastStdDev;
+
+      // apply exponential smoothing
+      avgTrend = trendAlpha * rawAvgTrend + (1 - trendAlpha) * avgTrend;
+      stdDevTrend = trendAlpha * rawStdDevTrend + (1 - trendAlpha) * stdDevTrend;
+    } else {
+      // set to 0 on first run
+      avgTrend = 0;
+      stdDevTrend = 0;
+    }
+    // save current values for next run
+    lastAvg = avg;
+    lastStdDev = stddev;
 
     //debug
-    Serial.print("Avg (60s): ");
+    Serial.print("Avg: ");
     Serial.print(avg);
     Serial.print(" | StdDev: ");
-    Serial.println(stddev);
+    Serial.print(stddev);
+    Serial.print(" | AvgTrend: ");
+    Serial.print(avgTrend * 100); // in percent
+    Serial.print("% | StdDevTrend: ");
+    Serial.print(stdDevTrend * 100); // in percent
+    Serial.println("%");
 
-    // MQTT: publish avg
-    char avgMsg[16];
-    dtostrf(avg, 4, 2, avgMsg);                     //float to string
-    client.publish(mqtt_topic_avg, avgMsg);         //send to topic
+    // MQTT: publish data
+    char msgBuffer[16];
+    
+    dtostrf(avg, 4, 2, msgBuffer);
+    client.publish(mqtt_topic_avg, msgBuffer);
 
-    // MQTT: publish standard deviation
-    char stdMsg[16];
-    dtostrf(stddev, 4, 2, stdMsg);                  
-    client.publish(mqtt_topic_stddev, stdMsg);   
+    dtostrf(stddev, 4, 2, msgBuffer);
+    client.publish(mqtt_topic_stddev, msgBuffer);
 
-    // MQTT: publish standard deviation 10s
-    char shortStdMsg[16];
-    dtostrf(shortStdDev, 4, 2, shortStdMsg);             
-    client.publish(mqtt_topic_stddev_10s, shortStdMsg);   
+    dtostrf(shortStdDev, 4, 2, msgBuffer);
+    client.publish(mqtt_topic_stddev_10s, msgBuffer);
+
+    // MQTT: publish trend values (in percent)
+    dtostrf(avgTrend * 100, 4, 1, msgBuffer); 
+    client.publish(mqtt_topic_avg_trend, msgBuffer);
+
+    dtostrf(stdDevTrend * 100, 4, 1, msgBuffer);
+    client.publish(mqtt_topic_stddev_trend, msgBuffer);
   }
 }
