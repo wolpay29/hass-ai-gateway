@@ -1,0 +1,18 @@
+[Unit]
+Description=Telegram Bot for Home Assistant
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/smarthome/smarthome/bots/telegram_bot
+Environment="PATH=/root/smarthome/smarthome/bots/telegram_bot/telegram_bot_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/root/smarthome/smarthome/bots/telegram_bot/telegram_bot_env/bin/python /root/smarthome/smarthome/bots/telegram_bot/telegram_ha_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
