@@ -19,6 +19,7 @@ def _load_entities() -> list:
 
 def parse_command(transcript: str) -> dict | None:
     entities = _load_entities()
+    valid_ids = {e["id"] for e in entities}
 
     entity_list = "\n".join(
         f'- {e["id"]} | keywords: {", ".join(e.get("keywords", []))} | actions: {", ".join(e["actions"])}'
@@ -30,10 +31,12 @@ def parse_command(transcript: str) -> dict | None:
 Geraete:
 {entity_list}
 
-Bei Treffer: {{"entity_id":"...", "action":"...", "domain":"..."}}
-Kein Treffer: {{"entity_id":null, "action":null, "domain":null}}"""
+Bei Treffer: {{"reply":"...", "entity_id":"...", "action":"...", "domain":"..."}}
+Kein Treffer: {{"reply":"...", "entity_id":null, "action":null, "domain":null}}
 
-    # Wenn NO_THINK in den Settings auf true steht, verbieten wir dem Modell das Denken
+WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine entity_id erfinden!
+"reply" ist immer eine kurze freundliche Antwort auf Deutsch."""
+
     if OLLAMA_NO_THINK:
         system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags und führe keine Gedankengänge aus!"
 
@@ -42,7 +45,7 @@ Kein Treffer: {{"entity_id":null, "action":null, "domain":null}}"""
 
     try:
         endpoint = f"{OLLAMA_URL}/v1/chat/completions"
-        
+
         payload = {
             "model": OLLAMA_MODEL,
             "messages": [
@@ -52,19 +55,13 @@ Kein Treffer: {{"entity_id":null, "action":null, "domain":null}}"""
             "temperature": OLLAMA_TEMPERATURE
         }
 
-        response = requests.post(
-            endpoint,
-            json=payload,
-            timeout=OLLAMA_TIMEOUT
-        )
-
+        response = requests.post(endpoint, json=payload, timeout=OLLAMA_TIMEOUT)
         response.raise_for_status()
         data = response.json()
         content = data["choices"][0]["message"]["content"]
 
         logger.info(f"[LLM] Antwort raw: {content}")
 
-        # Erstes vollstaendiges JSON-Objekt extrahieren (auch mehrzeilig)
         match = re.search(r'\{.*?\}', content, re.DOTALL)
         if not match:
             logger.error("[LLM] Kein JSON gefunden")
@@ -72,7 +69,15 @@ Kein Treffer: {{"entity_id":null, "action":null, "domain":null}}"""
 
         result = json.loads(match.group())
         logger.info(f"[LLM] Parsed: {result}")
-        return result if result.get("entity_id") else None
+
+        # entity_id gegen entities.yaml validieren — keine Halluzinationen erlaubt
+        if result.get("entity_id") and result["entity_id"] not in valid_ids:
+            logger.warning(f"[LLM] Halluzinierte Entity '{result['entity_id']}' – wird ignoriert")
+            result["entity_id"] = None
+            result["action"] = None
+            result["domain"] = None
+
+        return result
 
     except requests.exceptions.HTTPError as e:
         logger.error(f"[LLM] HTTP-Fehler: {e} - Response: {response.text}")

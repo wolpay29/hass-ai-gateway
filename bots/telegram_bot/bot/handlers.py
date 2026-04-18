@@ -34,17 +34,57 @@ async def handle_voice(update, context):
         )
         return
 
-    entity_id = command["entity_id"]
-    action = command["action"]
-    domain = command["domain"]
+    reply = command.get("reply", "")
+    entity_id = command.get("entity_id")
+    action = command.get("action")
+    domain = command.get("domain")
+
+    # Kein HA-Befehl erkannt → nur Antwort ausgeben
+    if not entity_id or not action or not domain:
+        await update.message.reply_text(f"💬 {reply}" if reply else f"❓ Kein passendes Gerät für: *{transcript}*", parse_mode="Markdown")
+        return
 
     success = call_service(domain, action, entity_id)
 
     if success:
+        answer = f"✅ *{action}* → `{entity_id}`"
+        if reply:
+            answer = f"✅ {reply}\n`{action}` → `{entity_id}`"
+        await update.message.reply_text(answer, parse_mode="Markdown")
+    else:
         await update.message.reply_text(
-            f"✅ *{action}* → `{entity_id}`",
+            f"❌ Fehler beim Ausführen: `{entity_id}`",
             parse_mode="Markdown"
         )
+
+
+async def handle_text(update, context):
+    if not update.message or not update.message.text:
+        return
+
+    text = update.message.text.strip()
+
+    await update.message.reply_text("🤖 Analysiere...")
+    command = parse_command(text)
+
+    if not command:
+        await update.message.reply_text("❓ Ich konnte deine Anfrage nicht verarbeiten.")
+        return
+
+    reply = command.get("reply", "")
+    entity_id = command.get("entity_id")
+    action = command.get("action")
+    domain = command.get("domain")
+
+    if not entity_id or not action or not domain:
+        await update.message.reply_text(f"💬 {reply}" if reply else "❓ Kein passendes Gerät gefunden.")
+        return
+
+    success = call_service(domain, action, entity_id)
+
+    if success:
+        answer = f"✅ {reply}\n`{action}` → `{entity_id}`" if reply else f"✅ *{action}* → `{entity_id}`"
+        await update.message.reply_text(answer, parse_mode="Markdown")
     else:
         await update.message.reply_text(
             f"❌ Fehler beim Ausführen: `{entity_id}`",

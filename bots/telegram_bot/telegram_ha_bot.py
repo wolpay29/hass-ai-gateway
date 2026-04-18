@@ -25,7 +25,7 @@ from telegram.ext import (
     filters,
 )
 
-from bot.handlers import handle_voice
+from bot.handlers import handle_voice, handle_text
 
 # Load config from .env file
 load_dotenv()
@@ -413,6 +413,15 @@ def main():
         CallbackQueryHandler(
             battery_notification_callback,
             pattern=r"^(battery_heat_pool|battery_ignore)$",
+        )
+    )
+
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND & ~filters.Regex(
+                r"^(🚪 TOR-Steuerung|🏊 Pool-Steuerung|🔋 Batterie prüfen)$"
+            ),
+            handle_text,
         )
     )
 
