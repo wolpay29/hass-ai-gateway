@@ -25,7 +25,8 @@ async def handle_voice(update, context):
         await update.message.reply_text(f"📝 Erkannt: {transcript}")
 
     await update.message.reply_text("🤖 Analysiere Befehl...")
-    command = parse_command(transcript)
+    #command = parse_command(transcript)
+    command = parse_command(transcript, chat_id=update.effective_chat.id)
 
     if not command:
         await update.message.reply_text(
@@ -65,7 +66,8 @@ async def handle_text(update, context):
     text = update.message.text.strip()
 
     await update.message.reply_text("🤖 Analysiere...")
-    command = parse_command(text)
+    #command = parse_command(text)
+    command = parse_command(text, chat_id=update.effective_chat.id)
 
     if not command:
         await update.message.reply_text("❓ Ich konnte deine Anfrage nicht verarbeiten.")

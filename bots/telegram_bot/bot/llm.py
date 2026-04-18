@@ -6,10 +6,13 @@ import logging
 from pathlib import Path
 from bot.config import (
     OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
-    OLLAMA_TEMPERATURE, OLLAMA_NO_THINK
+    OLLAMA_TEMPERATURE, OLLAMA_NO_THINK, LLM_HISTORY_SIZE
 )
 
 logger = logging.getLogger(__name__)
+
+# Gesprächsverlauf pro chat_id — nur aktiv wenn LLM_HISTORY_SIZE > 0
+_history: dict[int, list] = {}
 
 
 def _load_entities() -> list:
@@ -17,7 +20,7 @@ def _load_entities() -> list:
     return yaml.safe_load(path.read_text(encoding="utf-8"))["entities"]
 
 
-def parse_command(transcript: str) -> dict | None:
+def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
     entities = _load_entities()
     valid_ids = {e["id"] for e in entities}
 
@@ -41,7 +44,12 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags und führe keine Gedankengänge aus!"
 
     logger.info(f"[LLM] Transcript: '{transcript}'")
-    logger.info(f"[LLM] Modell: {OLLAMA_MODEL} | Server: {OLLAMA_URL} | No-Think: {OLLAMA_NO_THINK}")
+    logger.info(f"[LLM] Modell: {OLLAMA_MODEL} | Server: {OLLAMA_URL} | History: {LLM_HISTORY_SIZE}")
+
+    # History aufbauen (nur wenn aktiviert)
+    history = []
+    if LLM_HISTORY_SIZE > 0 and chat_id != 0:
+        history = _history.get(chat_id, [])
 
     try:
         endpoint = f"{OLLAMA_URL}/v1/chat/completions"
@@ -50,6 +58,7 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
             "model": OLLAMA_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
+                *history,
                 {"role": "user", "content": transcript}
             ],
             "temperature": OLLAMA_TEMPERATURE
@@ -76,6 +85,17 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
             result["entity_id"] = None
             result["action"] = None
             result["domain"] = None
+
+        # History speichern (nur wenn aktiviert)
+        if LLM_HISTORY_SIZE > 0 and chat_id != 0:
+            history.append({"role": "user", "content": transcript})
+            history.append({"role": "assistant", "content": content})
+            # Auf max. Länge kürzen (je 2 Einträge pro Austausch)
+            max_entries = LLM_HISTORY_SIZE * 2
+            if len(history) > max_entries:
+                history = history[-max_entries:]
+            _history[chat_id] = history
+            logger.info(f"[LLM] History für chat {chat_id}: {len(history)//2} Austausche gespeichert")
 
         return result
 
