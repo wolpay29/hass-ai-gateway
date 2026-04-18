@@ -34,3 +34,5 @@ Thumbs.db
 
 #Whisper
 data/voice/
+
+bot/entities.yaml
