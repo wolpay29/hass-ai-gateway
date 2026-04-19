@@ -4,6 +4,35 @@ from bot.llm import parse_command
 from bot.ha import call_service
 
 
+async def _process_command(update, context, transcript: str):
+    command = parse_command(transcript, chat_id=update.effective_chat.id)
+
+    if not command:
+        await update.message.reply_text("❓ Ich konnte deine Anfrage nicht verarbeiten.")
+        return
+
+    reply = command.get("reply", "")
+    actions = command.get("actions", [])
+
+    # Keine HA-Aktion → nur Antwort
+    if not actions:
+        await update.message.reply_text(f"💬 {reply}" if reply else "❓ Kein passendes Gerät gefunden.")
+        return
+
+    # Alle Aktionen ausführen
+    results = []
+    for act in actions:
+        entity_id = act.get("entity_id")
+        action    = act.get("action")
+        domain    = act.get("domain")
+        success   = call_service(domain, action, entity_id)
+        icon      = "✅" if success else "❌"
+        results.append(f"{icon} `{action}` → `{entity_id}`")
+
+    answer = (f"✅ {reply}\n\n" if reply else "") + "\n".join(results)
+    await update.message.reply_text(answer, parse_mode="Markdown")
+
+
 async def handle_voice(update, context):
     if not update.message or not update.message.voice:
         return
@@ -25,38 +54,7 @@ async def handle_voice(update, context):
         await update.message.reply_text(f"📝 Erkannt: {transcript}")
 
     await update.message.reply_text("🤖 Analysiere Befehl...")
-    #command = parse_command(transcript)
-    command = parse_command(transcript, chat_id=update.effective_chat.id)
-
-    if not command:
-        await update.message.reply_text(
-            f"❓ Kein passendes Gerät für: *{transcript}*",
-            parse_mode="Markdown"
-        )
-        return
-
-    reply = command.get("reply", "")
-    entity_id = command.get("entity_id")
-    action = command.get("action")
-    domain = command.get("domain")
-
-    # Kein HA-Befehl erkannt → nur Antwort ausgeben
-    if not entity_id or not action or not domain:
-        await update.message.reply_text(f"💬 {reply}" if reply else f"❓ Kein passendes Gerät für: *{transcript}*", parse_mode="Markdown")
-        return
-
-    success = call_service(domain, action, entity_id)
-
-    if success:
-        answer = f"✅ *{action}* → `{entity_id}`"
-        if reply:
-            answer = f"✅ {reply}\n`{action}` → `{entity_id}`"
-        await update.message.reply_text(answer, parse_mode="Markdown")
-    else:
-        await update.message.reply_text(
-            f"❌ Fehler beim Ausführen: `{entity_id}`",
-            parse_mode="Markdown"
-        )
+    await _process_command(update, context, transcript)
 
 
 async def handle_text(update, context):
@@ -64,31 +62,5 @@ async def handle_text(update, context):
         return
 
     text = update.message.text.strip()
-
     await update.message.reply_text("🤖 Analysiere...")
-    #command = parse_command(text)
-    command = parse_command(text, chat_id=update.effective_chat.id)
-
-    if not command:
-        await update.message.reply_text("❓ Ich konnte deine Anfrage nicht verarbeiten.")
-        return
-
-    reply = command.get("reply", "")
-    entity_id = command.get("entity_id")
-    action = command.get("action")
-    domain = command.get("domain")
-
-    if not entity_id or not action or not domain:
-        await update.message.reply_text(f"💬 {reply}" if reply else "❓ Kein passendes Gerät gefunden.")
-        return
-
-    success = call_service(domain, action, entity_id)
-
-    if success:
-        answer = f"✅ {reply}\n`{action}` → `{entity_id}`" if reply else f"✅ *{action}* → `{entity_id}`"
-        await update.message.reply_text(answer, parse_mode="Markdown")
-    else:
-        await update.message.reply_text(
-            f"❌ Fehler beim Ausführen: `{entity_id}`",
-            parse_mode="Markdown"
-        )
+    await _process_command(update, context, text)

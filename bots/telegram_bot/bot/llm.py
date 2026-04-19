@@ -34,8 +34,14 @@ def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
 Geraete:
 {entity_list}
 
-Bei Treffer: {{"reply":"...", "entity_id":"...", "action":"...", "domain":"..."}}
-Kein Treffer: {{"reply":"...", "entity_id":null, "action":null, "domain":null}}
+Format IMMER so (auch bei nur einem Gerät):
+{{"reply":"...", "actions":[{{"entity_id":"...","action":"...","domain":"..."}}]}}
+
+Mehrere Geräte gleichzeitig möglich:
+{{"reply":"...", "actions":[{{"entity_id":"light.licht_paul","action":"turn_on","domain":"light"}},{{"entity_id":"light.licht_max","action":"turn_on","domain":"light"}}]}}
+
+Kein Treffer:
+{{"reply":"...", "actions":[]}}
 
 WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine entity_id erfinden!
 "reply" ist immer eine kurze freundliche Antwort auf Deutsch."""
@@ -71,7 +77,7 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
 
         logger.info(f"[LLM] Antwort raw: {content}")
 
-        match = re.search(r'\{.*?\}', content, re.DOTALL)
+        match = re.search(r'\{.*\}', content, re.DOTALL)
         if not match:
             logger.error("[LLM] Kein JSON gefunden")
             return None
@@ -79,18 +85,19 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         result = json.loads(match.group())
         logger.info(f"[LLM] Parsed: {result}")
 
-        # entity_id gegen entities.yaml validieren — keine Halluzinationen erlaubt
-        if result.get("entity_id") and result["entity_id"] not in valid_ids:
-            logger.warning(f"[LLM] Halluzinierte Entity '{result['entity_id']}' – wird ignoriert")
-            result["entity_id"] = None
-            result["action"] = None
-            result["domain"] = None
+        # Alle entity_ids gegen entities.yaml validieren — keine Halluzinationen erlaubt
+        validated_actions = []
+        for act in result.get("actions", []):
+            if act.get("entity_id") and act["entity_id"] in valid_ids:
+                validated_actions.append(act)
+            elif act.get("entity_id"):
+                logger.warning(f"[LLM] Halluzinierte Entity '{act['entity_id']}' – wird ignoriert")
+        result["actions"] = validated_actions
 
         # History speichern (nur wenn aktiviert)
         if LLM_HISTORY_SIZE > 0 and chat_id != 0:
             history.append({"role": "user", "content": transcript})
             history.append({"role": "assistant", "content": content})
-            # Auf max. Länge kürzen (je 2 Einträge pro Austausch)
             max_entries = LLM_HISTORY_SIZE * 2
             if len(history) > max_entries:
                 history = history[-max_entries:]
