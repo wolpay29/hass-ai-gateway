@@ -31,13 +31,13 @@ async def _process_command(update, context, transcript: str):
 
         # Wurde die Action vom Limit in llm.py abgeschnitten?
         if act.get("ignored"):
-            ignored_results.append(f"❌ `{entity_id}` (`{action}`)")
+            ignored_results.append(f"❌ `{action}` -> `{entity_id}`")
             continue
 
         # Sicherheitshalber nochmal das harte Limit prüfen
         # (executed_results enthaelt bereits sowohl Steuer- als auch get_state-Actions)
         if MAX_ACTIONS_PER_COMMAND > 0 and len(executed_results) >= MAX_ACTIONS_PER_COMMAND:
-            ignored_results.append(f"❌ `{entity_id}` (`{action}`)")
+            ignored_results.append(f"❌ `{action}` -> `{entity_id}`")
             continue
 
         if action == "get_state":
@@ -49,11 +49,11 @@ async def _process_command(update, context, transcript: str):
                 "ha_response": ha_response,
             })
             icon = "✅" if ha_response else "❌"
-            executed_results.append(f"{icon} `get_state` → `{entity_id}`")
+            executed_results.append(f"{icon} `get_state` -> `{entity_id}`")
         else:
             success = call_service(domain, action, entity_id)
             icon = "✅" if success else "❌"
-            executed_results.append(f"{icon} `{action}` → `{entity_id}`")
+            executed_results.append(f"{icon} `{action}` -> `{entity_id}`")
 
     # Falls Zustandsabfragen dabei waren: zweiter LLM-Aufruf fuer natuerliche Antwort
     final_reply = reply
@@ -61,7 +61,7 @@ async def _process_command(update, context, transcript: str):
         final_reply = format_state_reply(transcript, state_queries, chat_id=update.effective_chat.id)
 
     # Nachricht zusammenbauen
-    answer = f"✅ {final_reply}\n\n" if final_reply else ""
+    answer = f"{final_reply}\n\n" if final_reply else ""
 
     if executed_results:
         answer += "\n".join(executed_results)
