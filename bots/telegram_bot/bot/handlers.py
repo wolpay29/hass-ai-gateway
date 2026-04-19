@@ -58,9 +58,7 @@ async def _process_command(update, context, transcript: str):
     # Falls Zustandsabfragen dabei waren: zweiter LLM-Aufruf fuer natuerliche Antwort
     final_reply = reply
     if state_queries:
-        state_reply = format_state_reply(transcript, state_queries, chat_id=update.effective_chat.id)
-        if state_reply:
-            final_reply = state_reply
+        final_reply = format_state_reply(transcript, state_queries, chat_id=update.effective_chat.id)
 
     # Nachricht zusammenbauen
     answer = f"✅ {final_reply}\n\n" if final_reply else ""

@@ -141,16 +141,37 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         return None
 
 
-def format_state_reply(transcript: str, state_data: list[dict], chat_id: int = 0) -> str | None:
+def _format_state_simple(state_data: list[dict]) -> str:
+    """Programmatischer Fallback falls der zweite LLM-Aufruf fehlschlaegt."""
+    parts = []
+    for item in state_data:
+        ha = item.get("ha_response")
+        description = item.get("description", item["entity_id"])
+        if ha is None:
+            parts.append(f"{description}: nicht verfügbar")
+            continue
+        state = ha.get("state", "unbekannt")
+        attrs = ha.get("attributes", {})
+        unit = attrs.get("unit_of_measurement", "")
+        friendly = attrs.get("friendly_name", description)
+        # Licht/Schalter lesbar machen
+        if state == "on":
+            state = "an"
+        elif state == "off":
+            state = "aus"
+        parts.append(f"{friendly}: {state}{' ' + unit if unit else ''}")
+    return "\n".join(parts)
+
+
+def format_state_reply(transcript: str, state_data: list[dict], chat_id: int = 0) -> str:
     """
-    Zweiter LLM-Aufruf: generiert eine natuerliche Antwort basierend auf Live-Zustandsdaten aus Home Assistant.
+    Zweiter LLM-Aufruf: generiert eine natuerliche Antwort basierend auf Live-Zustandsdaten aus HA.
+    Faellt bei Fehler auf einfache programmatische Formatierung zurueck.
 
     state_data: Liste von dicts mit {entity_id, description, ha_response}
-                ha_response ist die rohe JSON-Antwort von GET /api/states/{entity_id}
-                oder None falls der Abruf fehlgeschlagen ist.
     """
     if not state_data:
-        return None
+        return ""
 
     data_lines = []
     for item in state_data:
@@ -168,7 +189,7 @@ def format_state_reply(transcript: str, state_data: list[dict], chat_id: int = 0
 
     data_block = "\n".join(data_lines)
 
-    system_prompt = f"""Du bist ein Smart Home Assistent. Der Nutzer hat eine Frage gestellt und du hast bereits die aktuellen Live-Daten aus Home Assistant abgerufen.
+    system_prompt = """Du bist ein Smart Home Assistent. Der Nutzer hat eine Frage gestellt und du hast bereits die aktuellen Live-Daten aus Home Assistant abgerufen.
 
 Deine Aufgabe: Formuliere eine kurze, natuerliche Antwort auf Deutsch, die die angeforderte Information aus den Daten enthaelt.
 
@@ -179,17 +200,12 @@ Regeln:
 - Bei Rollo/Cover: "current_position" in Prozent
 - Falls die gefragte Information nicht in den Daten ist, sag das ehrlich
 - Keine Markdown-Formatierung, einfacher Text
-- Kurz und direkt, keine Einleitungen wie "Hier ist die Antwort:\""""
+- Kurz und direkt, keine Einleitungen"""
 
     if OLLAMA_NO_THINK:
         system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
 
-    user_content = f"""Frage: {transcript}
-
-Live-Daten aus Home Assistant:
-{data_block}
-
-Formuliere jetzt die Antwort."""
+    user_content = f"Frage: {transcript}\n\nLive-Daten aus Home Assistant:\n{data_block}\n\nFormuliere jetzt die Antwort."
 
     logger.info(f"[LLM Step2] Transcript: '{transcript}' | Entities: {[i['entity_id'] for i in state_data]}")
 
@@ -207,12 +223,20 @@ Formuliere jetzt die Antwort."""
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
 
-        # <think>...</think> Blöcke entfernen falls das Modell trotzdem welche erzeugt
+        # <think>...</think> entfernen; falls danach leer, Text nach letztem </think> nehmen
         cleaned = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+        if not cleaned:
+            parts = re.split(r'</think>', content, flags=re.DOTALL)
+            cleaned = parts[-1].strip()
 
         logger.info(f"[LLM Step2] Antwort: {cleaned}")
-        return cleaned or None
+        if cleaned:
+            return cleaned
 
     except Exception as e:
         logger.error(f"[LLM Step2] Fehler: {e}")
-        return None
+
+    # Fallback: einfache programmatische Formatierung
+    fallback = _format_state_simple(state_data)
+    logger.info(f"[LLM Step2] Fallback verwendet: {fallback}")
+    return fallback
