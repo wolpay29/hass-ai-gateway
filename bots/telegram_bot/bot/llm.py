@@ -146,20 +146,21 @@ def _format_state_simple(state_data: list[dict]) -> str:
     parts = []
     for item in state_data:
         ha = item.get("ha_response")
-        description = item.get("description", item["entity_id"])
+        # Kuratierte Beschreibung aus entities.yaml bevorzugen (ist menschenfreundlicher
+        # als der oft technische HA friendly_name wie "SN: 3015651602 PV Power")
+        label = item.get("description") or item["entity_id"]
         if ha is None:
-            parts.append(f"{description}: nicht verfügbar")
+            parts.append(f"{label}: nicht verfügbar")
             continue
         state = ha.get("state", "unbekannt")
         attrs = ha.get("attributes", {})
         unit = attrs.get("unit_of_measurement", "")
-        friendly = attrs.get("friendly_name", description)
-        # Licht/Schalter lesbar machen
+        # Licht/Schalter/Binary-Sensor lesbar machen
         if state == "on":
             state = "an"
         elif state == "off":
             state = "aus"
-        parts.append(f"{friendly}: {state}{' ' + unit if unit else ''}")
+        parts.append(f"{label}: {state}{' ' + unit if unit else ''}")
     return "\n".join(parts)
 
 
@@ -217,21 +218,29 @@ Regeln:
     logger.info(f"[LLM Step2] Transcript: '{transcript}' | Entities: {[i['entity_id'] for i in state_data]}")
 
     try:
-        # Ollama native API mit think: false — deaktiviert Thinking zuverlaessig auf Modellebene
-        endpoint = f"{OLLAMA_URL}/api/chat"
+        # OpenAI-kompatibler Endpoint (Ollama UND LM Studio unterstuetzen das)
+        # chat_template_kwargs.enable_thinking=false ist der offizielle Qwen3 Parameter
+        # um Thinking auf Chat-Template-Ebene zu deaktivieren
+        endpoint = f"{OLLAMA_URL}/v1/chat/completions"
         payload = {
             "model": OLLAMA_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}
             ],
-            "stream": False,
-            "think": False,
-            "options": {"temperature": OLLAMA_TEMPERATURE}
+            "temperature": OLLAMA_TEMPERATURE,
+            "chat_template_kwargs": {"enable_thinking": False}
         }
         response = requests.post(endpoint, json=payload, timeout=OLLAMA_TIMEOUT)
         response.raise_for_status()
-        content = response.json()["message"]["content"]
+        resp_json = response.json()
+        msg = resp_json["choices"][0]["message"]
+        content = msg.get("content") or ""
+        # Falls content leer ist, hat das Modell alles in reasoning_content abgelegt
+        if not content.strip():
+            reasoning = msg.get("reasoning_content") or ""
+            logger.warning(f"[LLM Step2] content leer, reasoning_content: {repr(reasoning)[:300]}")
+            content = reasoning
 
         logger.info(f"[LLM Step2] Raw: {repr(content)}")
 
