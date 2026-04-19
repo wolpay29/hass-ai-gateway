@@ -212,24 +212,26 @@ Regeln:
     # Thinking fuer den zweiten Call immer deaktivieren — einfache Formatierungsaufgabe
     system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
 
-    # /no_think ist ein Qwen3-spezifischer Token der Thinking auf Modellebene deaktiviert
-    user_content = f"/no_think\nFrage: {transcript}\n\nLive-Daten aus Home Assistant:\n{data_block}\n\nFormuliere jetzt die Antwort."
+    user_content = f"Frage: {transcript}\n\nLive-Daten aus Home Assistant:\n{data_block}\n\nFormuliere jetzt die Antwort."
 
     logger.info(f"[LLM Step2] Transcript: '{transcript}' | Entities: {[i['entity_id'] for i in state_data]}")
 
     try:
-        endpoint = f"{OLLAMA_URL}/v1/chat/completions"
+        # Ollama native API mit think: false — deaktiviert Thinking zuverlaessig auf Modellebene
+        endpoint = f"{OLLAMA_URL}/api/chat"
         payload = {
             "model": OLLAMA_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}
             ],
-            "temperature": OLLAMA_TEMPERATURE
+            "stream": False,
+            "think": False,
+            "options": {"temperature": OLLAMA_TEMPERATURE}
         }
         response = requests.post(endpoint, json=payload, timeout=OLLAMA_TIMEOUT)
         response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
+        content = response.json()["message"]["content"]
 
         logger.info(f"[LLM Step2] Raw: {repr(content)}")
 
