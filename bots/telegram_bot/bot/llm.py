@@ -183,8 +183,15 @@ def format_state_reply(transcript: str, state_data: list[dict], chat_id: int = 0
             continue
         state = ha.get("state")
         attributes = ha.get("attributes", {})
+        # Nur relevante Attribute senden — Sensor-Entities koennen dutzende Felder haben
+        relevant_keys = {
+            "unit_of_measurement", "friendly_name", "device_class",
+            "current_position", "hvac_mode", "current_temperature",
+            "target_temperature", "humidity",
+        }
+        filtered_attrs = {k: v for k, v in attributes.items() if k in relevant_keys}
         data_lines.append(
-            f"- {entity_id} ({description}): state={state!r} attributes={json.dumps(attributes, ensure_ascii=False)}"
+            f"- {entity_id} ({description}): state={state!r} attributes={json.dumps(filtered_attrs, ensure_ascii=False)}"
         )
 
     data_block = "\n".join(data_lines)
