@@ -230,11 +230,18 @@ Regeln:
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
 
+        logger.info(f"[LLM Step2] Raw: {repr(content)}")
+
         # <think>...</think> entfernen; falls danach leer, Text nach letztem </think> nehmen
         cleaned = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
         if not cleaned:
             parts = re.split(r'</think>', content, flags=re.DOTALL)
             cleaned = parts[-1].strip()
+        # Letzter Ausweg: Inhalt aus dem letzten <think>-Block selbst verwenden
+        if not cleaned:
+            think_contents = re.findall(r'<think>(.*?)</think>', content, flags=re.DOTALL)
+            if think_contents:
+                cleaned = think_contents[-1].strip()
 
         logger.info(f"[LLM Step2] Antwort: {cleaned}")
         if cleaned:
