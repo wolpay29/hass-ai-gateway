@@ -45,3 +45,4 @@ OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "2048"))
 OLLAMA_NO_THINK = os.getenv("OLLAMA_NO_THINK", "true").lower() == "true"
 
 LLM_HISTORY_SIZE = int(os.getenv("LLM_HISTORY_SIZE", "0"))
+MAX_ACTIONS_PER_COMMAND = int(os.getenv("MAX_ACTIONS_PER_COMMAND", "0"))

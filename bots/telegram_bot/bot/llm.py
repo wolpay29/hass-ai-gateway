@@ -6,7 +6,8 @@ import logging
 from pathlib import Path
 from bot.config import (
     OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
-    OLLAMA_TEMPERATURE, OLLAMA_NO_THINK, LLM_HISTORY_SIZE
+    OLLAMA_TEMPERATURE, OLLAMA_NO_THINK,
+    LLM_HISTORY_SIZE, MAX_ACTIONS_PER_COMMAND
 )
 
 logger = logging.getLogger(__name__)
@@ -49,8 +50,11 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
     if OLLAMA_NO_THINK:
         system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags und führe keine Gedankengänge aus!"
 
-    logger.info(f"[LLM] Transcript: '{transcript}'")
-    logger.info(f"[LLM] Modell: {OLLAMA_MODEL} | Server: {OLLAMA_URL} | History: {LLM_HISTORY_SIZE}")
+    logger.info(
+        f"[LLM] Transcript: '{transcript}' | Modell: {OLLAMA_MODEL} | "
+        f"Server: {OLLAMA_URL} | History: {LLM_HISTORY_SIZE} | "
+        f"MaxActions: {MAX_ACTIONS_PER_COMMAND}"
+    )
 
     # History aufbauen (nur wenn aktiviert)
     history = []
@@ -85,13 +89,25 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         result = json.loads(match.group())
         logger.info(f"[LLM] Parsed: {result}")
 
-        # Alle entity_ids gegen entities.yaml validieren — keine Halluzinationen erlaubt
+        # Alle entity_ids gegen entities.yaml validieren
         validated_actions = []
         for act in result.get("actions", []):
             if act.get("entity_id") and act["entity_id"] in valid_ids:
                 validated_actions.append(act)
             elif act.get("entity_id"):
                 logger.warning(f"[LLM] Halluzinierte Entity '{act['entity_id']}' – wird ignoriert")
+
+        # Limit anwenden und ignorierte Actions markieren
+        if MAX_ACTIONS_PER_COMMAND > 0 and len(validated_actions) > MAX_ACTIONS_PER_COMMAND:
+            logger.warning(
+                f"[LLM] Zu viele Aktionen ({len(validated_actions)}), "
+                f"begrenze auf {MAX_ACTIONS_PER_COMMAND}"
+            )
+            
+            # Die ersten N bleiben normal, der Rest bekommt "ignored": True
+            for i in range(MAX_ACTIONS_PER_COMMAND, len(validated_actions)):
+                validated_actions[i]["ignored"] = True
+
         result["actions"] = validated_actions
 
         # History speichern (nur wenn aktiviert)
