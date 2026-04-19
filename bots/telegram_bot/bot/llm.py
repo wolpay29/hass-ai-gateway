@@ -184,16 +184,20 @@ def format_state_reply(transcript: str, state_data: list[dict], chat_id: int = 0
             continue
         state = ha.get("state")
         attributes = ha.get("attributes", {})
-        # Nur relevante Attribute senden — Sensor-Entities koennen dutzende Felder haben
+        unit = attributes.get("unit_of_measurement")
+        # Wert bereits mit Einheit zusammensetzen, damit das Modell nichts
+        # kombinieren muss — es kopiert einfach den Wert in die Antwort.
+        value = f"{state} {unit}" if unit else str(state)
+        # Nur relevante Zusatz-Attribute senden (fuer Cover-Position, Climate-Modi etc.)
         relevant_keys = {
-            "unit_of_measurement", "friendly_name", "device_class",
-            "current_position", "hvac_mode", "current_temperature",
-            "target_temperature", "humidity",
+            "device_class", "current_position", "hvac_mode",
+            "current_temperature", "target_temperature", "humidity",
         }
         filtered_attrs = {k: v for k, v in attributes.items() if k in relevant_keys}
-        data_lines.append(
-            f"- {entity_id} ({description}): state={state!r} attributes={json.dumps(filtered_attrs, ensure_ascii=False)}"
-        )
+        line = f"- {entity_id} ({description}): value=\"{value}\""
+        if filtered_attrs:
+            line += f" attributes={json.dumps(filtered_attrs, ensure_ascii=False)}"
+        data_lines.append(line)
 
     data_block = "\n".join(data_lines)
 
@@ -209,10 +213,10 @@ Format IMMER so:
 {"antwort":"..."}
 
 Regeln fuer die Antwort:
-- Nutze die Einheit aus "unit_of_measurement" falls vorhanden
+- "value" ist der fertige Wert inkl. Einheit — einfach uebernehmen, nicht umrechnen
 - Bei binary_sensor: "on" = offen/aktiv, "off" = geschlossen/inaktiv
 - Bei Lichtern/Schaltern: "on" = an, "off" = aus
-- Bei Rollo/Cover: "current_position" in Prozent
+- Bei Rollo/Cover: "current_position" aus attributes in Prozent
 - Falls gefragte Information nicht in Daten ist, das ehrlich sagen
 - Kurzer, direkter deutscher Satz, keine Einleitungen, keine Markdown-Formatierung"""
 
