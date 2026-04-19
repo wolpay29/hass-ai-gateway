@@ -197,30 +197,30 @@ def format_state_reply(transcript: str, state_data: list[dict], chat_id: int = 0
 
     data_block = "\n".join(data_lines)
 
-    system_prompt = """Du bist ein Smart Home Assistent. Der Nutzer hat eine Frage gestellt und du hast bereits die aktuellen Live-Daten aus Home Assistant abgerufen.
+    # WICHTIG: strukturiertes JSON-Output erzwingen — genau wie beim ersten Call.
+    # Thinking-Modelle lassen bei offenen Aufgaben manchmal den "content" leer und
+    # erledigen alles im reasoning_content. Mit erzwungenem JSON-Format produziert
+    # das Modell zuverlaessig Output.
+    system_prompt = """Smart Home Assistent. Antworte NUR mit JSON, kein anderer Text.
 
-Deine Aufgabe: Formuliere eine kurze, natuerliche Antwort auf Deutsch, die die angeforderte Information aus den Daten enthaelt.
+Du erhaeltst eine Frage und Live-Daten aus Home Assistant. Formuliere eine kurze, natuerliche deutsche Antwort und gib sie als JSON zurueck.
 
-Regeln:
+Format IMMER so:
+{"antwort":"..."}
+
+Regeln fuer die Antwort:
 - Nutze die Einheit aus "unit_of_measurement" falls vorhanden
-- Bei binary_sensor: "on" meist = offen/aktiv, "off" meist = geschlossen/inaktiv (je nach device_class interpretieren)
+- Bei binary_sensor: "on" = offen/aktiv, "off" = geschlossen/inaktiv
 - Bei Lichtern/Schaltern: "on" = an, "off" = aus
 - Bei Rollo/Cover: "current_position" in Prozent
-- Falls die gefragte Information nicht in den Daten ist, sag das ehrlich
-- Keine Markdown-Formatierung, einfacher Text
-- Kurz und direkt, keine Einleitungen"""
+- Falls gefragte Information nicht in Daten ist, das ehrlich sagen
+- Kurzer, direkter deutscher Satz, keine Einleitungen, keine Markdown-Formatierung"""
 
-    # Thinking fuer den zweiten Call immer deaktivieren — einfache Formatierungsaufgabe
-    system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
-
-    user_content = f"Frage: {transcript}\n\nLive-Daten aus Home Assistant:\n{data_block}\n\nFormuliere jetzt die Antwort."
+    user_content = f"Frage: {transcript}\n\nLive-Daten aus Home Assistant:\n{data_block}\n\nAntworte jetzt NUR mit JSON im Format {{\"antwort\":\"...\"}}."
 
     logger.info(f"[LLM Step2] Transcript: '{transcript}' | Entities: {[i['entity_id'] for i in state_data]}")
 
     try:
-        # OpenAI-kompatibler Endpoint (Ollama UND LM Studio unterstuetzen das)
-        # chat_template_kwargs.enable_thinking=false ist der offizielle Qwen3 Parameter
-        # um Thinking auf Chat-Template-Ebene zu deaktivieren
         endpoint = f"{OLLAMA_URL}/v1/chat/completions"
         payload = {
             "model": OLLAMA_MODEL,
@@ -229,35 +229,33 @@ Regeln:
                 {"role": "user", "content": user_content}
             ],
             "temperature": OLLAMA_TEMPERATURE,
-            "chat_template_kwargs": {"enable_thinking": False}
         }
         response = requests.post(endpoint, json=payload, timeout=OLLAMA_TIMEOUT)
         response.raise_for_status()
         resp_json = response.json()
         msg = resp_json["choices"][0]["message"]
         content = msg.get("content") or ""
-        # Falls content leer ist, hat das Modell alles in reasoning_content abgelegt
-        if not content.strip():
-            reasoning = msg.get("reasoning_content") or ""
-            logger.warning(f"[LLM Step2] content leer, reasoning_content: {repr(reasoning)[:300]}")
-            content = reasoning
 
         logger.info(f"[LLM Step2] Raw: {repr(content)}")
 
-        # <think>...</think> entfernen; falls danach leer, Text nach letztem </think> nehmen
-        cleaned = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
-        if not cleaned:
-            parts = re.split(r'</think>', content, flags=re.DOTALL)
-            cleaned = parts[-1].strip()
-        # Letzter Ausweg: Inhalt aus dem letzten <think>-Block selbst verwenden
-        if not cleaned:
-            think_contents = re.findall(r'<think>(.*?)</think>', content, flags=re.DOTALL)
-            if think_contents:
-                cleaned = think_contents[-1].strip()
+        if not content.strip():
+            reasoning_len = len(msg.get("reasoning_content") or "")
+            logger.warning(
+                f"[LLM Step2] content leer (reasoning_content: {reasoning_len} Zeichen) "
+                f"— nutze programmatischen Fallback"
+            )
 
-        logger.info(f"[LLM Step2] Antwort: {cleaned}")
-        if cleaned:
-            return cleaned
+        # JSON aus der Antwort extrahieren (gleiche Technik wie im ersten Call)
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if match:
+            try:
+                parsed = json.loads(match.group())
+                antwort = (parsed.get("antwort") or "").strip()
+                if antwort:
+                    logger.info(f"[LLM Step2] Antwort: {antwort}")
+                    return antwort
+            except json.JSONDecodeError as e:
+                logger.warning(f"[LLM Step2] JSON-Parsing fehlgeschlagen: {e}")
 
     except Exception as e:
         logger.error(f"[LLM Step2] Fehler: {e}")

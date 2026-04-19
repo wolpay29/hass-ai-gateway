@@ -70,7 +70,12 @@ async def _process_command(update, context, transcript: str):
         answer += f"\n\n⚠️ *Durch Limit ({MAX_ACTIONS_PER_COMMAND}) ignoriert:*\n"
         answer += "\n".join(ignored_results)
 
-    await update.message.reply_text(answer, parse_mode="Markdown")
+    try:
+        await update.message.reply_text(answer, parse_mode="Markdown")
+    except Exception as e:
+        # Falls die Antwort kaputte Markdown enthaelt (z.B. von einem Modell erzeugt),
+        # ohne Parse-Modus erneut senden damit die Nachricht nicht ganz verloren geht.
+        await update.message.reply_text(answer)
 
 
 async def handle_voice(update, context):
