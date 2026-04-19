@@ -385,8 +385,8 @@ entities:
     domain: climate
 
   - id: sensor.pool_weather_temperature
-    description: "Pool Wassertemperatur"
-    keywords: ["pool temperatur", "pool wasser", "wassertemperatur", "wie warm pool", "pool warm"]
+    description: "Außentemperatur"
+    keywords: ["outside air temperatur", "wie warm draußen"]
     actions: ["get_state"]
     domain: sensor
 

@@ -209,10 +209,11 @@ Regeln:
 - Keine Markdown-Formatierung, einfacher Text
 - Kurz und direkt, keine Einleitungen"""
 
-    if OLLAMA_NO_THINK:
-        system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
+    # Thinking fuer den zweiten Call immer deaktivieren — einfache Formatierungsaufgabe
+    system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
 
-    user_content = f"Frage: {transcript}\n\nLive-Daten aus Home Assistant:\n{data_block}\n\nFormuliere jetzt die Antwort."
+    # /no_think ist ein Qwen3-spezifischer Token der Thinking auf Modellebene deaktiviert
+    user_content = f"/no_think\nFrage: {transcript}\n\nLive-Daten aus Home Assistant:\n{data_block}\n\nFormuliere jetzt die Antwort."
 
     logger.info(f"[LLM Step2] Transcript: '{transcript}' | Entities: {[i['entity_id'] for i in state_data]}")
 
