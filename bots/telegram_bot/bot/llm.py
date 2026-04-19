@@ -44,6 +44,14 @@ Mehrere Geräte gleichzeitig möglich:
 Kein Treffer:
 {{"reply":"...", "actions":[]}}
 
+Aktionen:
+- "turn_on" / "turn_off" / "toggle": Gerät steuern (Licht, Schalter)
+- "trigger": Automation ausloesen (Tor, Pool Pumpe)
+- "get_state": Aktuellen Zustand eines Sensors/Geraets abfragen (z.B. "wie warm ist der Pool?", "ist das Licht bei Paul an?", "wie viel erzeugt die PV?")
+
+Wenn der Nutzer nach einem Wert, Zustand oder Status fragt, nutze "get_state".
+Bei "get_state" ist "reply" egal — er wird spaeter mit Live-Daten ersetzt. Einfach "..." oder kurzen Platzhalter setzen.
+
 WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine entity_id erfinden!
 "reply" ist immer eine kurze freundliche Antwort auf Deutsch."""
 
@@ -130,4 +138,81 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         return None
     except Exception as e:
         logger.error(f"[LLM] Allgemeiner Fehler: {e}")
+        return None
+
+
+def format_state_reply(transcript: str, state_data: list[dict], chat_id: int = 0) -> str | None:
+    """
+    Zweiter LLM-Aufruf: generiert eine natuerliche Antwort basierend auf Live-Zustandsdaten aus Home Assistant.
+
+    state_data: Liste von dicts mit {entity_id, description, ha_response}
+                ha_response ist die rohe JSON-Antwort von GET /api/states/{entity_id}
+                oder None falls der Abruf fehlgeschlagen ist.
+    """
+    if not state_data:
+        return None
+
+    data_lines = []
+    for item in state_data:
+        entity_id = item["entity_id"]
+        description = item.get("description", "")
+        ha = item.get("ha_response")
+        if ha is None:
+            data_lines.append(f"- {entity_id} ({description}): FEHLER beim Abruf")
+            continue
+        state = ha.get("state")
+        attributes = ha.get("attributes", {})
+        data_lines.append(
+            f"- {entity_id} ({description}): state={state!r} attributes={json.dumps(attributes, ensure_ascii=False)}"
+        )
+
+    data_block = "\n".join(data_lines)
+
+    system_prompt = f"""Du bist ein Smart Home Assistent. Der Nutzer hat eine Frage gestellt und du hast bereits die aktuellen Live-Daten aus Home Assistant abgerufen.
+
+Deine Aufgabe: Formuliere eine kurze, natuerliche Antwort auf Deutsch, die die angeforderte Information aus den Daten enthaelt.
+
+Regeln:
+- Nutze die Einheit aus "unit_of_measurement" falls vorhanden
+- Bei binary_sensor: "on" meist = offen/aktiv, "off" meist = geschlossen/inaktiv (je nach device_class interpretieren)
+- Bei Lichtern/Schaltern: "on" = an, "off" = aus
+- Bei Rollo/Cover: "current_position" in Prozent
+- Falls die gefragte Information nicht in den Daten ist, sag das ehrlich
+- Keine Markdown-Formatierung, einfacher Text
+- Kurz und direkt, keine Einleitungen wie "Hier ist die Antwort:\""""
+
+    if OLLAMA_NO_THINK:
+        system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
+
+    user_content = f"""Frage: {transcript}
+
+Live-Daten aus Home Assistant:
+{data_block}
+
+Formuliere jetzt die Antwort."""
+
+    logger.info(f"[LLM Step2] Transcript: '{transcript}' | Entities: {[i['entity_id'] for i in state_data]}")
+
+    try:
+        endpoint = f"{OLLAMA_URL}/v1/chat/completions"
+        payload = {
+            "model": OLLAMA_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ],
+            "temperature": OLLAMA_TEMPERATURE
+        }
+        response = requests.post(endpoint, json=payload, timeout=OLLAMA_TIMEOUT)
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+
+        # <think>...</think> Blöcke entfernen falls das Modell trotzdem welche erzeugt
+        cleaned = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+
+        logger.info(f"[LLM Step2] Antwort: {cleaned}")
+        return cleaned or None
+
+    except Exception as e:
+        logger.error(f"[LLM Step2] Fehler: {e}")
         return None

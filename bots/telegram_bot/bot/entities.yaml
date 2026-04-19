@@ -1,140 +1,141 @@
 entities:
+  #==================== lights ====================
   - id: light.licht_paul
     description: "Licht Zimmer Paul OG"
     keywords: ["paul", "pauls zimmer", "zimmer paul"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_max
     description: "Licht Zimmer Max OG"
     keywords: ["max", "max zimmer", "zimmer max"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_lisa
     description: "Licht Zimmer Lisa OG"
     keywords: ["lisa", "lisas zimmer", "zimmer lisa"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_eltern
     description: "Licht Elternschlafzimmer OG"
     keywords: ["eltern", "schlafzimmer", "elternzimmer"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_bad
     description: "Licht Bad Obergeschoss"
     keywords: ["bad", "bad oben", "badezimmer oben"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_buro
     description: "Licht Buero"
     keywords: ["buero", "buro", "arbeitszimmer", "office"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_kuche_1
     description: "Kuechenbeleuchtung Gruppe 1"
     keywords: ["kueche", "kuche", "kuechenlicht", "kueche 1"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_kuche_2
     description: "Kuechenbeleuchtung Gruppe 2"
     keywords: ["kueche 2", "kuche 2", "kuechenlicht 2"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_essen_1
     description: "Licht Essbereich Gruppe 1"
     keywords: ["essen", "essbereich", "esszimmer", "essen 1"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_essen_2
     description: "Licht Essbereich Gruppe 2"
     keywords: ["essen 2", "essbereich 2", "esszimmer 2"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_wohnzimmer_1
     description: "Wohnzimmerlicht Gruppe 1"
     keywords: ["wohnzimmer", "wohnzimmerlicht", "wohnzimmer 1"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_wohnzimmer_2
     description: "Wohnzimmerlicht Gruppe 2"
     keywords: ["wohnzimmer 2", "wohnzimmerlicht 2"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_wc_eg
     description: "Licht WC Erdgeschoss"
     keywords: ["wc", "toilette", "klo"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_gang_eg
     description: "Licht Gang Erdgeschoss"
     keywords: ["gang", "flur", "gang eg"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_abstellraum_eg
     description: "Licht Abstellraum Erdgeschoss"
     keywords: ["abstellraum", "abstellraum eg", "lager eg"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_vorzimmer_eg
     description: "Licht Vorzimmer Eingang Erdgeschoss"
     keywords: ["vorzimmer", "eingang", "vorraum"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_treppe_og
     description: "Licht Treppe Obergeschoss"
     keywords: ["treppe og", "stiege oben", "treppe oben"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_partyraum
     description: "Licht Partyraum Keller"
     keywords: ["partyraum", "party", "keller party"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_abstellraum_ug
     description: "Licht Abstellraum Keller"
     keywords: ["abstellraum ug", "abstellraum keller", "lager keller"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_werkstatt
     description: "Licht Werkstatt Keller"
     keywords: ["werkstatt", "werkraum"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_technikraum
     description: "Licht Technikraum Heizraum Keller"
     keywords: ["technikraum", "technik", "heizraum", "heizung"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_stiege_ug
     description: "Licht Stiege Keller"
     keywords: ["stiege ug", "treppe keller", "stiege keller"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_bad_ug
     description: "Licht Bad Keller"
     keywords: ["bad ug", "bad keller", "badezimmer keller"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_kg_aus
@@ -158,26 +159,28 @@ entities:
   - id: light.licht_aussen_kg
     description: "Aussenlicht Kellergeschoss"
     keywords: ["aussen kg", "aussenlicht keller"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_aussen_eg
     description: "Aussenlicht Erdgeschoss Terrasse"
     keywords: ["aussen eg", "terrasse", "terrassenlicht"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_aussen_og
     description: "Aussenlicht Obergeschoss Balkon"
     keywords: ["aussen og", "balkon", "balkonlicht"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
 
   - id: light.licht_stiege_aussen
     description: "Aussenbeleuchtung Stiege Eingang"
     keywords: ["stiege aussen", "eingang aussen", "aussenstiege"]
-    actions: ["turn_on", "turn_off", "toggle"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
     domain: light
+
+  #==================== rollos ====================
 
   - id: switch.rollo_paul_auf
     description: "Rollo Zimmer Paul hochfahren"
@@ -323,6 +326,8 @@ entities:
     actions: ["turn_on"]
     domain: switch
 
+  #==================== automations ====================
+
   - id: automation.trigger_tor_geh
     description: "Fussgaengertor oeffnen"
     keywords: ["tor geh", "gehtor", "fussgaengertor", "kleines tor", "tor auf"]
@@ -370,3 +375,41 @@ entities:
     keywords: ["pool heizung aus", "pool heizpumpe aus"]
     actions: ["trigger"]
     domain: automation
+
+  #==================== sensors / states ====================
+
+  - id: climate.eco_elyo_pool_eco_elyo
+    description: "Pool Waermepumpe (Eco Elyo) - Betriebsmodus und Temperaturen"
+    keywords: ["pool waermepumpe", "pool heizung status", "eco elyo", "pool heizung temperatur", "pool heizung modus"]
+    actions: ["get_state"]
+    domain: climate
+
+  - id: sensor.pool_weather_temperature
+    description: "Pool Wassertemperatur"
+    keywords: ["pool temperatur", "pool wasser", "wassertemperatur", "wie warm pool", "pool warm"]
+    actions: ["get_state"]
+    domain: sensor
+
+  - id: sensor.plug_server_power
+    description: "Stromverbrauch Server Steckdose"
+    keywords: ["server strom", "server verbrauch", "server leistung", "plug server"]
+    actions: ["get_state"]
+    domain: sensor
+
+  - id: sensor.sn_3015651602_pv_power
+    description: "Aktuelle PV Leistung (Photovoltaik Erzeugung)"
+    keywords: ["pv", "photovoltaik", "solar", "solarleistung", "pv leistung", "pv erzeugung", "wie viel strom erzeugt"]
+    actions: ["get_state"]
+    domain: sensor
+
+  - id: sensor.sn_3015651602_battery_soc_total
+    description: "Batterie Ladezustand gesamt (SoC)"
+    keywords: ["batterie", "akku", "batterie stand", "batterie prozent", "soc", "ladezustand"]
+    actions: ["get_state"]
+    domain: sensor
+
+  - id: binary_sensor.abstellkammer_tur
+    description: "Tuer Abstellkammer Kontakt (offen/zu)"
+    keywords: ["abstellkammer tuer", "abstellkammer tur", "abstellraum tuer", "kammer tuer", "tuer abstellkammer offen"]
+    actions: ["get_state"]
+    domain: binary_sensor
