@@ -32,16 +32,45 @@ async def _process_command(update, context, transcript: str):
     actions = command.get("actions", [])
     fallback_states: list[dict] = []
 
-    # needs_fallback: Entity gefunden, aber Aktion braucht Parameter (z.B. set_temperature).
-    # Mode 1 hat dieselbe 5-Aktionen-Einschraenkung -> direkt zu Mode 2 springen.
+    # needs_fallback: Entity in entities.yaml gefunden, aber Aktion braucht Parameter
+    # (z.B. Temperatur setzen, Rollo-Position abfragen auf Switch-Entity) -> Fallback.
     if any(a.get("action") == "needs_fallback" for a in actions):
         triggering = next(a for a in actions if a.get("action") == "needs_fallback")
         logger.info(
             f"[Dispatch] chat={chat_id} | needs_fallback fuer "
             f"'{triggering.get('entity_id', '?')}' — wechsel zu Mode {FALLBACK_MODE}"
         )
-        if FALLBACK_MODE == 2:
-            await update.message.reply_text("🔍 Nicht in Entity-Config gefunden, nutze MCP-Modus...")
+        if FALLBACK_MODE == 1:
+            await update.message.reply_text("🔍 Nicht in Entity-Config lösbar, suche Entities manuell...")
+            fallback_states = get_all_states(
+                FALLBACK_REST_DOMAINS or None,
+                FALLBACK_REST_MAX_ENTITIES,
+            )
+            logger.info(
+                f"[Fallback Mode 1 / REST] chat={chat_id} | needs_fallback-Pfad | "
+                f"{len(fallback_states)} Live-Entities von HA geladen"
+            )
+            fb = parse_command_with_states(transcript, fallback_states, chat_id=chat_id)
+            # Nur weitermachen wenn die Live-Liste echte ausführbare Actions liefert
+            if fb and fb.get("actions") and not any(
+                a.get("action") == "needs_fallback" for a in fb["actions"]
+            ):
+                logger.info(
+                    f"[Fallback Mode 1 / REST] chat={chat_id} | Treffer: "
+                    f"{[a.get('entity_id') for a in fb['actions']]}"
+                )
+                command = fb
+                reply = command.get("reply", "")
+                actions = command.get("actions", [])
+                # fallback_states already set above — used by states_by_id further down
+            else:
+                logger.warning(f"[Fallback Mode 1 / REST] chat={chat_id} | kein verwertbarer Treffer")
+                await update.message.reply_text(
+                    "❓ Kein passendes Gerät gefunden (REST-Fallback ohne Treffer)."
+                )
+                return
+        elif FALLBACK_MODE == 2:
+            await update.message.reply_text("🔍 Nicht in Entity-Config lösbar, nutze MCP-Modus...")
             mcp_reply = fallback_via_mcp(transcript, chat_id=chat_id)
             if mcp_reply:
                 logger.info(f"[Dispatch] chat={chat_id} | Mode 2 lieferte Antwort")
@@ -49,12 +78,13 @@ async def _process_command(update, context, transcript: str):
             else:
                 logger.warning(f"[Dispatch] chat={chat_id} | Mode 2 fehlgeschlagen")
                 await update.message.reply_text("❓ MCP-Fallback fehlgeschlagen.")
+            return
         else:
             await update.message.reply_text(
                 "❓ Diese Aktion benötigt Parameter (z.B. Temperatur, Position) "
                 "die hier nicht ausführbar sind. Aktiviere FALLBACK_MODE=2 für MCP-Unterstützung."
             )
-        return
+            return
 
     if not actions:
         logger.info(
