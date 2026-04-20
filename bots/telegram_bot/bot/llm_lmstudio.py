@@ -29,7 +29,8 @@ def fallback_via_mcp(transcript: str, chat_id: int = 0) -> str | None:
 
     payload = {
         "model": LMSTUDIO_MODEL,
-        "messages": [
+        # /api/v1/chat erwartet "input" statt "messages" (LM Studio native Format)
+        "input": [
             {"role": "system", "content": system},
             {"role": "user", "content": transcript},
         ],
@@ -68,8 +69,20 @@ def fallback_via_mcp(transcript: str, chat_id: int = 0) -> str | None:
         response.raise_for_status()
         data = response.json()
         logger.debug(f"[LM Studio Fallback] Response keys: {list(data.keys())}")
-        # /api/v1/chat und /v1/chat/completions haben dasselbe choices-Format
-        content = (data["choices"][0]["message"].get("content") or "").strip()
+        # /api/v1/chat gibt "output" zurueck; /v1/chat/completions gibt "choices"
+        if "output" in data:
+            # LM Studio native format: output ist eine Liste von message-Objekten
+            output = data["output"]
+            content = ""
+            for item in (output if isinstance(output, list) else [output]):
+                if isinstance(item, dict):
+                    c = item.get("content") or ""
+                    if isinstance(c, list):
+                        c = " ".join(p.get("text", "") for p in c if isinstance(p, dict))
+                    content += c
+            content = content.strip()
+        else:
+            content = (data["choices"][0]["message"].get("content") or "").strip()
         logger.info(f"[LM Studio Fallback] Antwort: {content[:200]}")
         return content or None
     except requests.exceptions.HTTPError as e:
