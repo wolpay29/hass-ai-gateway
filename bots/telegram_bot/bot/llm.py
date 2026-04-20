@@ -58,9 +58,10 @@ Aktionen:
 - "turn_on" / "turn_off" / "toggle": Gerät steuern (Licht, Schalter)
 - "trigger": Automation ausloesen (Tor, Pool Pumpe)
 - "get_state": Aktuellen Zustand eines Sensors/Geraets abfragen (z.B. "wie warm ist der Pool?", "ist das Licht bei Paul an?", "wie viel erzeugt die PV?")
-- "needs_fallback": Wenn der Nutzer eine Aktion mit Parametern verlangt die hier nicht ausfuehrbar ist (z.B. Temperatur setzen, Helligkeit, Position, Modus). Entity-ID trotzdem angeben.
+- "needs_fallback": Wenn der Nutzer eine Aktion mit Parametern verlangt die hier nicht ausfuehrbar ist (z.B. Temperatur setzen, Helligkeit, Position, Modus). Auch wenn der Nutzer nach einem Wert fragt, den der Entity-Typ nicht liefern kann — z.B. Position/Stellung einer Rollo die als Switch (on/off) definiert ist. Entity-ID trotzdem angeben.
 
 Wenn der Nutzer nach einem Wert, Zustand oder Status fragt, nutze "get_state".
+Wenn der Nutzer nach Position/Stellung/Prozent einer Rollo/eines Covers fragt und die Entity ein Switch ist (kein cover-Domain), nutze "needs_fallback".
 Bei "get_state" ist "reply" egal — er wird spaeter mit Live-Daten ersetzt. Einfach "..." oder kurzen Platzhalter setzen.
 
 WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine entity_id erfinden!
@@ -192,7 +193,7 @@ Aktionen:
 - "turn_on" / "turn_off" / "toggle" fuer light/switch/cover
 - "trigger" fuer automation
 - "get_state" fuer Zustandsabfragen (sensor, binary_sensor, climate, ...)
-- "needs_fallback": Wenn der Nutzer eine Aktion mit Parametern verlangt die hier nicht ausfuehrbar ist (z.B. Temperatur setzen, Helligkeit, Position, Modus). Entity-ID trotzdem angeben.
+- "needs_fallback": Wenn der Nutzer eine Aktion mit Parametern verlangt die hier nicht ausfuehrbar ist (z.B. Temperatur setzen, Helligkeit, Position, Modus). Auch wenn der Nutzer nach Position/Stellung/Prozent fragt und die Entity ein Switch ist (kein cover-Domain). Entity-ID trotzdem angeben.
 
 WICHTIG: entity_id MUSS exakt aus der obigen Live-Liste stammen. Niemals erfinden!
 "domain" ist der Teil vor dem Punkt in der entity_id.
