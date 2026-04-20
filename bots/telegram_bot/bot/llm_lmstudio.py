@@ -57,14 +57,18 @@ def fallback_via_mcp(transcript: str, chat_id: int = 0) -> str | None:
 
     response = None
     try:
+        # /api/v1/chat ist LM Studios nativer Endpunkt — nur dieser unterstuetzt
+        # den "integrations" Parameter fuer MCP. /v1/chat/completions ignoriert ihn.
         response = requests.post(
-            f"{LMSTUDIO_URL}/v1/chat/completions",
+            f"{LMSTUDIO_URL}/api/v1/chat",
             json=payload,
             headers=headers,
             timeout=LMSTUDIO_TIMEOUT,
         )
         response.raise_for_status()
         data = response.json()
+        logger.debug(f"[LM Studio Fallback] Response keys: {list(data.keys())}")
+        # /api/v1/chat und /v1/chat/completions haben dasselbe choices-Format
         content = (data["choices"][0]["message"].get("content") or "").strip()
         logger.info(f"[LM Studio Fallback] Antwort: {content[:200]}")
         return content or None
