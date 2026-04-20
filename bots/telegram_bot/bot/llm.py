@@ -5,8 +5,8 @@ import re
 import logging
 from pathlib import Path
 from bot.config import (
-    OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
-    OLLAMA_TEMPERATURE, OLLAMA_NO_THINK,
+    LMSTUDIO_URL, LMSTUDIO_MODEL, LMSTUDIO_TIMEOUT, LMSTUDIO_API_KEY,
+    LMSTUDIO_TEMPERATURE, LMSTUDIO_NO_THINK,
     LLM_HISTORY_SIZE, MAX_ACTIONS_PER_COMMAND
 )
 
@@ -14,6 +14,15 @@ logger = logging.getLogger(__name__)
 
 # Gesprächsverlauf pro chat_id — nur aktiv wenn LLM_HISTORY_SIZE > 0
 _history: dict[int, list] = {}
+
+
+def _lmstudio_headers() -> dict:
+    """Standard-Header fuer LM Studio /v1-Calls. Fuegt Bearer-Token an,
+    wenn LM Studio Server-Auth aktiv ist (sobald MCP genutzt wird Pflicht)."""
+    h = {"Content-Type": "application/json"}
+    if LMSTUDIO_API_KEY:
+        h["Authorization"] = f"Bearer {LMSTUDIO_API_KEY}"
+    return h
 
 
 def _load_entities() -> list:
@@ -55,12 +64,12 @@ Bei "get_state" ist "reply" egal — er wird spaeter mit Live-Daten ersetzt. Ein
 WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine entity_id erfinden!
 "reply" ist immer eine kurze freundliche Antwort auf Deutsch."""
 
-    if OLLAMA_NO_THINK:
+    if LMSTUDIO_NO_THINK:
         system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags und führe keine Gedankengänge aus!"
 
     logger.info(
-        f"[LLM] Transcript: '{transcript}' | Modell: {OLLAMA_MODEL} | "
-        f"Server: {OLLAMA_URL} | History: {LLM_HISTORY_SIZE} | "
+        f"[LLM] Transcript: '{transcript}' | Modell: {LMSTUDIO_MODEL} | "
+        f"Server: {LMSTUDIO_URL} | History: {LLM_HISTORY_SIZE} | "
         f"MaxActions: {MAX_ACTIONS_PER_COMMAND}"
     )
 
@@ -70,19 +79,19 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         history = _history.get(chat_id, [])
 
     try:
-        endpoint = f"{OLLAMA_URL}/v1/chat/completions"
+        endpoint = f"{LMSTUDIO_URL}/v1/chat/completions"
 
         payload = {
-            "model": OLLAMA_MODEL,
+            "model": LMSTUDIO_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 *history,
                 {"role": "user", "content": transcript}
             ],
-            "temperature": OLLAMA_TEMPERATURE
+            "temperature": LMSTUDIO_TEMPERATURE
         }
 
-        response = requests.post(endpoint, json=payload, timeout=OLLAMA_TIMEOUT)
+        response = requests.post(endpoint, json=payload, headers=_lmstudio_headers(), timeout=LMSTUDIO_TIMEOUT)
         response.raise_for_status()
         data = response.json()
         content = data["choices"][0]["message"]["content"]
@@ -138,6 +147,112 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         return None
     except Exception as e:
         logger.error(f"[LLM] Allgemeiner Fehler: {e}")
+        return None
+
+
+def parse_command_with_states(transcript: str, states: list[dict], chat_id: int = 0) -> dict | None:
+    """REST-Fallback (Mode 1): nutzt Live-Entities aus HA statt entities.yaml.
+
+    Gleiches JSON-Output-Format wie parse_command(). entity_list wird aus den
+    uebergebenen Live-States gebaut; Validierung gegen deren entity_ids.
+    Wenn ein Treffer gefunden wird, ist das Ergebnis im handlers.py genauso
+    ausfuehrbar wie das Ergebnis von parse_command().
+    """
+    if not states:
+        logger.warning("[LLM Fallback REST] Keine Live-States uebergeben")
+        return None
+
+    valid_ids = {s["entity_id"] for s in states}
+
+    entity_list = "\n".join(
+        f'- {s["entity_id"]} | name: {s.get("friendly_name") or "-"} | '
+        f'domain: {s["domain"]} | state: {s.get("state") or "-"}'
+        for s in states
+    )
+
+    system_prompt = f"""Smart Home Assistent. Antworte NUR mit JSON, kein anderer Text.
+Du erhaeltst eine Live-Liste aller Home Assistant Entities (kein vordefinierter Katalog).
+
+Geraete (live aus Home Assistant):
+{entity_list}
+
+Format IMMER so:
+{{"reply":"...", "actions":[{{"entity_id":"...","action":"...","domain":"..."}}]}}
+
+Kein Treffer:
+{{"reply":"...", "actions":[]}}
+
+Aktionen:
+- "turn_on" / "turn_off" / "toggle" fuer light/switch/cover
+- "trigger" fuer automation
+- "get_state" fuer Zustandsabfragen (sensor, binary_sensor, climate, ...)
+
+WICHTIG: entity_id MUSS exakt aus der obigen Live-Liste stammen. Niemals erfinden!
+"domain" ist der Teil vor dem Punkt in der entity_id.
+"reply" ist eine kurze freundliche Antwort auf Deutsch."""
+
+    if LMSTUDIO_NO_THINK:
+        system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
+
+    logger.info(
+        f"[LLM Fallback REST] Transcript: '{transcript}' | Entities: {len(states)} | "
+        f"Modell: {LMSTUDIO_MODEL}"
+    )
+
+    try:
+        endpoint = f"{LMSTUDIO_URL}/v1/chat/completions"
+        payload = {
+            "model": LMSTUDIO_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": transcript},
+            ],
+            "temperature": LMSTUDIO_TEMPERATURE,
+        }
+        response = requests.post(endpoint, json=payload, headers=_lmstudio_headers(), timeout=LMSTUDIO_TIMEOUT)
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        logger.info(f"[LLM Fallback REST] Antwort raw: {content}")
+
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if not match:
+            logger.error("[LLM Fallback REST] Kein JSON gefunden")
+            return None
+
+        result = json.loads(match.group())
+
+        validated: list[dict] = []
+        for act in result.get("actions", []):
+            eid = act.get("entity_id")
+            if not eid:
+                continue
+            if eid not in valid_ids:
+                logger.warning(f"[LLM Fallback REST] Halluzinierte Entity '{eid}' - ignoriert")
+                continue
+            # domain nachziehen falls das Modell sie nicht geliefert hat
+            if not act.get("domain") and "." in eid:
+                act["domain"] = eid.split(".", 1)[0]
+            validated.append(act)
+
+        if MAX_ACTIONS_PER_COMMAND > 0 and len(validated) > MAX_ACTIONS_PER_COMMAND:
+            logger.warning(
+                f"[LLM Fallback REST] Zu viele Aktionen ({len(validated)}), "
+                f"begrenze auf {MAX_ACTIONS_PER_COMMAND}"
+            )
+            for i in range(MAX_ACTIONS_PER_COMMAND, len(validated)):
+                validated[i]["ignored"] = True
+
+        result["actions"] = validated
+        return result
+
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"[LLM Fallback REST] HTTP-Fehler: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        logger.error(f"[LLM Fallback REST] JSON-Parsing fehlgeschlagen: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"[LLM Fallback REST] Fehler: {e}")
         return None
 
 
@@ -225,16 +340,16 @@ Regeln fuer die Antwort:
     logger.info(f"[LLM Step2] Transcript: '{transcript}' | Entities: {[i['entity_id'] for i in state_data]}")
 
     try:
-        endpoint = f"{OLLAMA_URL}/v1/chat/completions"
+        endpoint = f"{LMSTUDIO_URL}/v1/chat/completions"
         payload = {
-            "model": OLLAMA_MODEL,
+            "model": LMSTUDIO_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}
             ],
-            "temperature": OLLAMA_TEMPERATURE,
+            "temperature": LMSTUDIO_TEMPERATURE,
         }
-        response = requests.post(endpoint, json=payload, timeout=OLLAMA_TIMEOUT)
+        response = requests.post(endpoint, json=payload, headers=_lmstudio_headers(), timeout=LMSTUDIO_TIMEOUT)
         response.raise_for_status()
         resp_json = response.json()
         msg = resp_json["choices"][0]["message"]

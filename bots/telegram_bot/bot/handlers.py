@@ -1,7 +1,11 @@
 from bot.voice import ensure_voice_dir, transcribe_audio
-from bot.config import VOICE_REPLY_WITH_TRANSCRIPT, MAX_ACTIONS_PER_COMMAND
-from bot.llm import parse_command, format_state_reply, _load_entities
-from bot.ha import call_service, get_state
+from bot.config import (
+    VOICE_REPLY_WITH_TRANSCRIPT, MAX_ACTIONS_PER_COMMAND,
+    FALLBACK_MODE, FALLBACK_REST_DOMAINS, FALLBACK_REST_MAX_ENTITIES,
+)
+from bot.llm import parse_command, parse_command_with_states, format_state_reply, _load_entities
+from bot.llm_lmstudio import fallback_via_mcp
+from bot.ha import call_service, get_state, get_all_states
 
 
 async def _process_command(update, context, transcript: str):
@@ -13,12 +17,45 @@ async def _process_command(update, context, transcript: str):
 
     reply = command.get("reply", "")
     actions = command.get("actions", [])
+    fallback_states: list[dict] = []
 
     if not actions:
-        await update.message.reply_text(f"💬 {reply}" if reply else "❓ Kein passendes Gerät gefunden.")
-        return
+        # Kein Treffer in entities.yaml -> je nach FALLBACK_MODE weitermachen
+        if FALLBACK_MODE == 1:
+            # REST-Fallback: alle HA-Entities holen und LLM mit Live-Liste fragen
+            fallback_states = get_all_states(
+                FALLBACK_REST_DOMAINS or None,
+                FALLBACK_REST_MAX_ENTITIES,
+            )
+            fb = parse_command_with_states(
+                transcript, fallback_states, chat_id=update.effective_chat.id
+            )
+            if fb and fb.get("actions"):
+                command = fb
+                reply = command.get("reply", "")
+                actions = command.get("actions", [])
+            else:
+                await update.message.reply_text(
+                    "❓ Kein passendes Gerät gefunden (REST-Fallback ohne Treffer)."
+                )
+                return
+        elif FALLBACK_MODE == 2:
+            # MCP-Fallback: LM Studio macht alles (Tool-Auswahl, Ausfuehrung, Antwort)
+            mcp_reply = fallback_via_mcp(transcript, chat_id=update.effective_chat.id)
+            if mcp_reply:
+                await update.message.reply_text(mcp_reply)
+            else:
+                await update.message.reply_text("❓ MCP-Fallback fehlgeschlagen.")
+            return
+        else:
+            await update.message.reply_text(
+                f"💬 {reply}" if reply else "❓ Kein passendes Gerät gefunden."
+            )
+            return
 
     entities_by_id = {e["id"]: e for e in _load_entities()}
+    # Fuer REST-Fallback: Live-States als Beschreibungsquelle (friendly_name)
+    states_by_id = {s["entity_id"]: s for s in fallback_states}
 
     executed_results = []
     ignored_results = []
@@ -42,7 +79,12 @@ async def _process_command(update, context, transcript: str):
 
         if action == "get_state":
             ha_response = get_state(entity_id)
-            description = entities_by_id.get(entity_id, {}).get("description", "")
+            # Beschreibung bevorzugt aus entities.yaml; fuer REST-Fallback-Entities
+            # friendly_name aus den Live-States als Ersatz.
+            description = (
+                entities_by_id.get(entity_id, {}).get("description")
+                or states_by_id.get(entity_id, {}).get("friendly_name", "")
+            )
             state_queries.append({
                 "entity_id": entity_id,
                 "description": description,

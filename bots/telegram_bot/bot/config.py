@@ -30,19 +30,42 @@ WHISPER_EXTERNAL_MODEL = os.getenv("WHISPER_EXTERNAL_MODEL", "deepdml/faster-whi
 VOICE_REPLY_WITH_TRANSCRIPT = os.getenv("VOICE_REPLY_WITH_TRANSCRIPT", "true").lower() == "true"
 VOICE_DOWNLOAD_DIR = os.getenv("VOICE_DOWNLOAD_DIR", "data/voice")
 
-# Ollama LLM
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://10.1.10.111:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5:0.8b")
-OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "30"))
-OLLAMA_KEEP_ALIVE = int(os.getenv("OLLAMA_KEEP_ALIVE", "-1"))
+# LM Studio (OpenAI-kompatible /v1 API). Wird sowohl fuer den Primaerpfad
+# (parse_command / format_state_reply) als auch fuer den MCP-Fallback (Mode 2)
+# genutzt - gleiche Instanz, gleiches Modell.
+LMSTUDIO_URL = os.getenv("LMSTUDIO_URL", "http://10.1.10.78:1234")
+LMSTUDIO_MODEL = os.getenv("LMSTUDIO_MODEL", "qwen2.5-7b-instruct")
+LMSTUDIO_TIMEOUT = int(os.getenv("LMSTUDIO_TIMEOUT", "30"))
+LMSTUDIO_KEEP_ALIVE = int(os.getenv("LMSTUDIO_KEEP_ALIVE", "-1"))
+# LMSTUDIO_API_KEY: Pflicht wenn LM Studio Server-Auth aktiv ist (fuer MCP noetig).
+LMSTUDIO_API_KEY = os.getenv("LMSTUDIO_API_KEY", "")
 
 # Modellparameter (Quality/Geschwindigkeit)
-OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.1"))
-OLLAMA_TOP_P = float(os.getenv("OLLAMA_TOP_P", "0.9"))
-OLLAMA_TOP_K = int(os.getenv("OLLAMA_TOP_K", "20"))
-OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "2048"))
+LMSTUDIO_TEMPERATURE = float(os.getenv("LMSTUDIO_TEMPERATURE", "0.1"))
+LMSTUDIO_TOP_P = float(os.getenv("LMSTUDIO_TOP_P", "0.9"))
+LMSTUDIO_TOP_K = int(os.getenv("LMSTUDIO_TOP_K", "20"))
+LMSTUDIO_NUM_CTX = int(os.getenv("LMSTUDIO_NUM_CTX", "2048"))
 
-OLLAMA_NO_THINK = os.getenv("OLLAMA_NO_THINK", "true").lower() == "true"
+LMSTUDIO_NO_THINK = os.getenv("LMSTUDIO_NO_THINK", "true").lower() == "true"
 
 LLM_HISTORY_SIZE = int(os.getenv("LLM_HISTORY_SIZE", "0"))
 MAX_ACTIONS_PER_COMMAND = int(os.getenv("MAX_ACTIONS_PER_COMMAND", "0"))
+
+# Fallback-Modus wenn parse_command() keine Action findet:
+#   0 = aus (bisheriges Verhalten, keine Treffer -> Fehlermeldung)
+#   1 = einfacher Fallback: alle HA-Entities per REST holen und LLM erneut fragen
+#   2 = MCP-Fallback: LM Studio mit konfiguriertem HA-MCP-Server aufrufen
+FALLBACK_MODE = int(os.getenv("FALLBACK_MODE", "0"))
+
+# Mode 1 - REST Fallback Filter/Limit.
+# Leer/"{}"/"[]" bei DOMAINS = kein Domain-Filter (alle werden uebergeben).
+# 0 bei MAX_ENTITIES = kein Limit.
+FALLBACK_REST_MAX_ENTITIES = int(os.getenv("FALLBACK_REST_MAX_ENTITIES", "150"))
+_fb_domains_raw = os.getenv(
+    "FALLBACK_REST_DOMAINS",
+    "light,switch,sensor,binary_sensor,climate,automation,cover"
+).strip()
+if _fb_domains_raw in ("", "{}", "[]"):
+    FALLBACK_REST_DOMAINS: list[str] = []
+else:
+    FALLBACK_REST_DOMAINS = [d.strip() for d in _fb_domains_raw.split(",") if d.strip()]
