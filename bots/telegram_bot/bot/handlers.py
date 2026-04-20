@@ -1,3 +1,5 @@
+import logging
+
 from bot.voice import ensure_voice_dir, transcribe_audio
 from bot.config import (
     VOICE_REPLY_WITH_TRANSCRIPT, MAX_ACTIONS_PER_COMMAND,
@@ -7,11 +9,22 @@ from bot.llm import parse_command, parse_command_with_states, format_state_reply
 from bot.llm_lmstudio import fallback_via_mcp
 from bot.ha import call_service, get_state, get_all_states
 
+logger = logging.getLogger(__name__)
+
+_FALLBACK_LABELS = {0: "0 / OFF", 1: "1 / REST", 2: "2 / MCP"}
+
 
 async def _process_command(update, context, transcript: str):
-    command = parse_command(transcript, chat_id=update.effective_chat.id)
+    chat_id = update.effective_chat.id
+    logger.info(
+        f"[Dispatch] chat={chat_id} | FALLBACK_MODE={_FALLBACK_LABELS.get(FALLBACK_MODE, FALLBACK_MODE)} "
+        f"| Transcript: '{transcript}'"
+    )
+
+    command = parse_command(transcript, chat_id=chat_id)
 
     if not command:
+        logger.warning(f"[Dispatch] chat={chat_id} | parse_command lieferte nichts zurueck")
         await update.message.reply_text("❓ Ich konnte deine Anfrage nicht verarbeiten.")
         return
 
@@ -22,11 +35,18 @@ async def _process_command(update, context, transcript: str):
     # needs_fallback: Entity gefunden, aber Aktion braucht Parameter (z.B. set_temperature).
     # Mode 1 hat dieselbe 5-Aktionen-Einschraenkung -> direkt zu Mode 2 springen.
     if any(a.get("action") == "needs_fallback" for a in actions):
+        triggering = next(a for a in actions if a.get("action") == "needs_fallback")
+        logger.info(
+            f"[Dispatch] chat={chat_id} | needs_fallback fuer "
+            f"'{triggering.get('entity_id', '?')}' — wechsel zu Mode {FALLBACK_MODE}"
+        )
         if FALLBACK_MODE == 2:
-            mcp_reply = fallback_via_mcp(transcript, chat_id=update.effective_chat.id)
+            mcp_reply = fallback_via_mcp(transcript, chat_id=chat_id)
             if mcp_reply:
+                logger.info(f"[Dispatch] chat={chat_id} | Mode 2 lieferte Antwort")
                 await update.message.reply_text(mcp_reply)
             else:
+                logger.warning(f"[Dispatch] chat={chat_id} | Mode 2 fehlgeschlagen")
                 await update.message.reply_text("❓ MCP-Fallback fehlgeschlagen.")
         else:
             await update.message.reply_text(
@@ -36,6 +56,10 @@ async def _process_command(update, context, transcript: str):
         return
 
     if not actions:
+        logger.info(
+            f"[Dispatch] chat={chat_id} | Primaerpfad ohne Treffer in entities.yaml "
+            f"-> Fallback Mode {FALLBACK_MODE}"
+        )
         # Kein Treffer in entities.yaml -> je nach FALLBACK_MODE weitermachen
         if FALLBACK_MODE == 1:
             # REST-Fallback: alle HA-Entities holen und LLM mit Live-Liste fragen
@@ -43,24 +67,35 @@ async def _process_command(update, context, transcript: str):
                 FALLBACK_REST_DOMAINS or None,
                 FALLBACK_REST_MAX_ENTITIES,
             )
+            logger.info(
+                f"[Fallback Mode 1 / REST] chat={chat_id} | "
+                f"{len(fallback_states)} Live-Entities von HA geladen"
+            )
             fb = parse_command_with_states(
-                transcript, fallback_states, chat_id=update.effective_chat.id
+                transcript, fallback_states, chat_id=chat_id
             )
             if fb and fb.get("actions"):
+                logger.info(
+                    f"[Fallback Mode 1 / REST] chat={chat_id} | Treffer: "
+                    f"{[a.get('entity_id') for a in fb['actions']]}"
+                )
                 command = fb
                 reply = command.get("reply", "")
                 actions = command.get("actions", [])
             else:
+                logger.warning(f"[Fallback Mode 1 / REST] chat={chat_id} | kein Treffer")
                 await update.message.reply_text(
                     "❓ Kein passendes Gerät gefunden (REST-Fallback ohne Treffer)."
                 )
                 return
         elif FALLBACK_MODE == 2:
             # MCP-Fallback: LM Studio macht alles (Tool-Auswahl, Ausfuehrung, Antwort)
-            mcp_reply = fallback_via_mcp(transcript, chat_id=update.effective_chat.id)
+            mcp_reply = fallback_via_mcp(transcript, chat_id=chat_id)
             if mcp_reply:
+                logger.info(f"[Dispatch] chat={chat_id} | Mode 2 lieferte Antwort")
                 await update.message.reply_text(mcp_reply)
             else:
+                logger.warning(f"[Dispatch] chat={chat_id} | Mode 2 fehlgeschlagen")
                 await update.message.reply_text("❓ MCP-Fallback fehlgeschlagen.")
             return
         else:
@@ -68,6 +103,11 @@ async def _process_command(update, context, transcript: str):
                 f"💬 {reply}" if reply else "❓ Kein passendes Gerät gefunden."
             )
             return
+
+    logger.info(
+        f"[Dispatch] chat={chat_id} | Primaerpfad: {len(actions)} Action(s) -> "
+        f"{[a.get('entity_id') for a in actions]}"
+    )
 
     entities_by_id = {e["id"]: e for e in _load_entities()}
     # Fuer REST-Fallback: Live-States als Beschreibungsquelle (friendly_name)

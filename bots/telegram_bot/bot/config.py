@@ -48,6 +48,21 @@ LMSTUDIO_NUM_CTX = int(os.getenv("LMSTUDIO_NUM_CTX", "2048"))
 
 LMSTUDIO_NO_THINK = os.getenv("LMSTUDIO_NO_THINK", "true").lower() == "true"
 
+# MCP (Mode 2) - Context-Groesse fuer /api/v1/chat
+LMSTUDIO_CONTEXT_LENGTH = int(os.getenv("LMSTUDIO_CONTEXT_LENGTH", "8000"))
+
+# MCP (Mode 2) - Whitelist der erlaubten HA-MCP-Tools.
+# Leer/"{}"/"[]" = kein Filter (LM Studio erlaubt alle vom Server gemeldeten Tools).
+_mcp_tools_raw = os.getenv(
+    "LMSTUDIO_MCP_ALLOWED_TOOLS",
+    "HassTurnOn,HassTurnOff,HassCancelAllTimers,HassBroadcast,"
+    "HassClimateSetTemperature,HassLightSet,GetDateTime,GetLiveContext"
+).strip()
+if _mcp_tools_raw in ("", "{}", "[]"):
+    LMSTUDIO_MCP_ALLOWED_TOOLS: list[str] = []
+else:
+    LMSTUDIO_MCP_ALLOWED_TOOLS = [t.strip() for t in _mcp_tools_raw.split(",") if t.strip()]
+
 LLM_HISTORY_SIZE = int(os.getenv("LLM_HISTORY_SIZE", "0"))
 MAX_ACTIONS_PER_COMMAND = int(os.getenv("MAX_ACTIONS_PER_COMMAND", "0"))
 

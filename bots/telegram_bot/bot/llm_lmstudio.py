@@ -3,6 +3,7 @@ import logging
 from bot.config import (
     LMSTUDIO_URL, LMSTUDIO_MODEL, LMSTUDIO_API_KEY,
     LMSTUDIO_TIMEOUT, LMSTUDIO_TEMPERATURE,
+    LMSTUDIO_MCP_ALLOWED_TOOLS, LMSTUDIO_CONTEXT_LENGTH,
     HA_URL, HA_TOKEN,
 )
 
@@ -12,39 +13,36 @@ logger = logging.getLogger(__name__)
 def fallback_via_mcp(transcript: str, chat_id: int = 0) -> str | None:
     """Fallback (Mode 2) ueber LM Studio mit HA-MCP-Server.
 
-    Uebergibt den HA-MCP-Server als ephemeral integration direkt im API-Request,
-    damit LM Studio die MCP-Tools kennt und aufrufen kann.
+    Nutzt LM Studios nativen /api/v1/chat-Endpunkt mit ephemeral_mcp integration —
+    nur dort werden MCP-Tools aus dem Request geladen und aufgerufen.
 
     Voraussetzungen in LM Studio:
     - Developer Tab -> Server laeuft auf 0.0.0.0:1234
     - Server Settings -> "Allow per-request MCPs" aktiviert
     - Server Settings -> API-Auth aktiviert, Key in LMSTUDIO_API_KEY
-    - Ein Tool-faehiges Modell geladen (z.B. Qwen2.5-Instruct >=7B)
+    - Ein Tool-faehiges Modell geladen (z.B. Qwen >=7B)
     """
-    system = (
-        "Du bist ein Home-Assistant-Assistent mit Zugriff auf MCP-Tools. "
-        "Nutze die verfuegbaren Tools, um Geraete zu steuern oder Zustaende abzufragen. "
-        "Antworte knapp, direkt und auf Deutsch, ohne Markdown."
-    )
+    mcp_url = f"{HA_URL}/api/mcp"
+
+    integration = {
+        "type": "ephemeral_mcp",
+        "server_label": "home-assistant",
+        "server_url": mcp_url,
+        "headers": {"Authorization": f"Bearer {HA_TOKEN}"},
+    }
+    if LMSTUDIO_MCP_ALLOWED_TOOLS:
+        integration["allowed_tools"] = LMSTUDIO_MCP_ALLOWED_TOOLS
 
     payload = {
         "model": LMSTUDIO_MODEL,
-        # /api/v1/chat erwartet "input" statt "messages" (LM Studio native Format)
-        "input": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": transcript},
-        ],
+        # /api/v1/chat akzeptiert "input" als String (einfachster Fall —
+        # matched den funktionierenden curl-Test des Users).
+        "input": transcript,
         "temperature": LMSTUDIO_TEMPERATURE,
+        "context_length": LMSTUDIO_CONTEXT_LENGTH,
         # MCP-Server als ephemeral integration mitgeben — sonst kennt das Modell keine Tools.
         # Benoetigt "Allow per-request MCPs" in LM Studio Server Settings.
-        "integrations": [
-            {
-                "type": "ephemeral_mcp",
-                "server_label": "home-assistant",
-                "server_url": f"{HA_URL}/api/mcp",
-                "headers": {"Authorization": f"Bearer {HA_TOKEN}"},
-            }
-        ],
+        "integrations": [integration],
     }
 
     headers = {"Content-Type": "application/json"}
@@ -52,8 +50,9 @@ def fallback_via_mcp(transcript: str, chat_id: int = 0) -> str | None:
         headers["Authorization"] = f"Bearer {LMSTUDIO_API_KEY}"
 
     logger.info(
-        f"[LM Studio Fallback] Transcript: '{transcript}' | "
-        f"MCP: {HA_URL}/api/mcp | Modell: {LMSTUDIO_MODEL}"
+        f"[Fallback Mode 2 / MCP] chat={chat_id} | Transcript: '{transcript}' | "
+        f"MCP: {mcp_url} | Modell: {LMSTUDIO_MODEL} | "
+        f"allowed_tools: {LMSTUDIO_MCP_ALLOWED_TOOLS or 'ALL'} | ctx={LMSTUDIO_CONTEXT_LENGTH}"
     )
 
     response = None
@@ -68,27 +67,51 @@ def fallback_via_mcp(transcript: str, chat_id: int = 0) -> str | None:
         )
         response.raise_for_status()
         data = response.json()
-        logger.debug(f"[LM Studio Fallback] Response keys: {list(data.keys())}")
-        # /api/v1/chat gibt "output" zurueck; /v1/chat/completions gibt "choices"
-        if "output" in data:
-            # LM Studio native format: output ist eine Liste von message-Objekten
-            output = data["output"]
-            content = ""
-            for item in (output if isinstance(output, list) else [output]):
-                if isinstance(item, dict):
-                    c = item.get("content") or ""
-                    if isinstance(c, list):
-                        c = " ".join(p.get("text", "") for p in c if isinstance(p, dict))
-                    content += c
-            content = content.strip()
-        else:
+
+        # Output ist eine Liste mit items type={message|reasoning|tool_call}.
+        # Fuer den User interessieren nur die "message"-Items; tool_calls und
+        # reasoning loggen wir zur Nachvollziehbarkeit.
+        output = data.get("output", [])
+        if not isinstance(output, list):
+            output = [output]
+
+        message_parts: list[str] = []
+        tool_calls: list[str] = []
+        for item in output:
+            if not isinstance(item, dict):
+                continue
+            itype = item.get("type")
+            if itype == "message":
+                c = item.get("content") or ""
+                if isinstance(c, list):
+                    c = " ".join(p.get("text", "") for p in c if isinstance(p, dict))
+                message_parts.append(c)
+            elif itype == "tool_call":
+                tool_calls.append(str(item.get("tool", "?")))
+
+        stats = data.get("stats", {})
+        logger.info(
+            f"[Fallback Mode 2 / MCP] tool_calls={tool_calls or '[]'} | "
+            f"input_tokens={stats.get('input_tokens')} | "
+            f"output_tokens={stats.get('total_output_tokens')}"
+        )
+
+        content = "".join(message_parts).strip()
+        if not content and "choices" in data:
+            # Fallback auf OpenAI-Format, falls LM Studio Version das anders liefert
             content = (data["choices"][0]["message"].get("content") or "").strip()
-        logger.info(f"[LM Studio Fallback] Antwort: {content[:200]}")
-        return content or None
+
+        if content:
+            logger.info(f"[Fallback Mode 2 / MCP] Antwort: {content[:200]}")
+            return content
+
+        logger.warning("[Fallback Mode 2 / MCP] Leere Antwort vom Modell")
+        return None
+
     except requests.exceptions.HTTPError as e:
         body = response.text if response is not None else ""
-        logger.error(f"[LM Studio Fallback] HTTP-Fehler: {e} - Body: {body}")
+        logger.error(f"[Fallback Mode 2 / MCP] HTTP-Fehler: {e} - Body: {body}")
         return None
     except Exception as e:
-        logger.error(f"[LM Studio Fallback] Fehler: {e}")
+        logger.error(f"[Fallback Mode 2 / MCP] Fehler: {e}")
         return None
