@@ -19,6 +19,22 @@ async def _process_command(update, context, transcript: str):
     actions = command.get("actions", [])
     fallback_states: list[dict] = []
 
+    # needs_fallback: Entity gefunden, aber Aktion braucht Parameter (z.B. set_temperature).
+    # Mode 1 hat dieselbe 5-Aktionen-Einschraenkung -> direkt zu Mode 2 springen.
+    if any(a.get("action") == "needs_fallback" for a in actions):
+        if FALLBACK_MODE == 2:
+            mcp_reply = fallback_via_mcp(transcript, chat_id=update.effective_chat.id)
+            if mcp_reply:
+                await update.message.reply_text(mcp_reply)
+            else:
+                await update.message.reply_text("❓ MCP-Fallback fehlgeschlagen.")
+        else:
+            await update.message.reply_text(
+                "❓ Diese Aktion benötigt Parameter (z.B. Temperatur, Position) "
+                "die hier nicht ausführbar sind. Aktiviere FALLBACK_MODE=2 für MCP-Unterstützung."
+            )
+        return
+
     if not actions:
         # Kein Treffer in entities.yaml -> je nach FALLBACK_MODE weitermachen
         if FALLBACK_MODE == 1:

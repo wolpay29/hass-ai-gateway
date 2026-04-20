@@ -27,7 +27,8 @@ def _lmstudio_headers() -> dict:
 
 def _load_entities() -> list:
     path = Path(__file__).parent / "entities.yaml"
-    return yaml.safe_load(path.read_text(encoding="utf-8"))["entities"]
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return (data or {}).get("entities") or []
 
 
 def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
@@ -57,6 +58,7 @@ Aktionen:
 - "turn_on" / "turn_off" / "toggle": Gerät steuern (Licht, Schalter)
 - "trigger": Automation ausloesen (Tor, Pool Pumpe)
 - "get_state": Aktuellen Zustand eines Sensors/Geraets abfragen (z.B. "wie warm ist der Pool?", "ist das Licht bei Paul an?", "wie viel erzeugt die PV?")
+- "needs_fallback": Wenn der Nutzer eine Aktion mit Parametern verlangt die hier nicht ausfuehrbar ist (z.B. Temperatur setzen, Helligkeit, Position, Modus). Entity-ID trotzdem angeben.
 
 Wenn der Nutzer nach einem Wert, Zustand oder Status fragt, nutze "get_state".
 Bei "get_state" ist "reply" egal — er wird spaeter mit Live-Daten ersetzt. Einfach "..." oder kurzen Platzhalter setzen.
@@ -106,10 +108,14 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         result = json.loads(match.group())
         logger.info(f"[LLM] Parsed: {result}")
 
-        # Alle entity_ids gegen entities.yaml validieren
+        # Alle entity_ids gegen entities.yaml validieren.
+        # "needs_fallback" ist ein Steuersignal, kein echter HA-Aufruf — immer durchlassen.
         validated_actions = []
         for act in result.get("actions", []):
-            if act.get("entity_id") and act["entity_id"] in valid_ids:
+            if act.get("action") == "needs_fallback":
+                validated_actions.append(act)
+                logger.info(f"[LLM] needs_fallback fuer '{act.get('entity_id', '?')}'")
+            elif act.get("entity_id") and act["entity_id"] in valid_ids:
                 validated_actions.append(act)
             elif act.get("entity_id"):
                 logger.warning(f"[LLM] Halluzinierte Entity '{act['entity_id']}' – wird ignoriert")
@@ -186,6 +192,7 @@ Aktionen:
 - "turn_on" / "turn_off" / "toggle" fuer light/switch/cover
 - "trigger" fuer automation
 - "get_state" fuer Zustandsabfragen (sensor, binary_sensor, climate, ...)
+- "needs_fallback": Wenn der Nutzer eine Aktion mit Parametern verlangt die hier nicht ausfuehrbar ist (z.B. Temperatur setzen, Helligkeit, Position, Modus). Entity-ID trotzdem angeben.
 
 WICHTIG: entity_id MUSS exakt aus der obigen Live-Liste stammen. Niemals erfinden!
 "domain" ist der Teil vor dem Punkt in der entity_id.
@@ -224,6 +231,10 @@ WICHTIG: entity_id MUSS exakt aus der obigen Live-Liste stammen. Niemals erfinde
         validated: list[dict] = []
         for act in result.get("actions", []):
             eid = act.get("entity_id")
+            if act.get("action") == "needs_fallback":
+                validated.append(act)
+                logger.info(f"[LLM Fallback REST] needs_fallback fuer '{eid or '?'}'")
+                continue
             if not eid:
                 continue
             if eid not in valid_ids:
