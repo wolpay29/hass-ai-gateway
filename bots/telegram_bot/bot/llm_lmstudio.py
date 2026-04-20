@@ -3,24 +3,23 @@ import logging
 from bot.config import (
     LMSTUDIO_URL, LMSTUDIO_MODEL, LMSTUDIO_API_KEY,
     LMSTUDIO_TIMEOUT, LMSTUDIO_TEMPERATURE,
+    HA_URL, HA_TOKEN,
 )
 
 logger = logging.getLogger(__name__)
 
 
 def fallback_via_mcp(transcript: str, chat_id: int = 0) -> str | None:
-    """Fallback (Mode 2) ueber LM Studio mit konfiguriertem HA-MCP-Server.
+    """Fallback (Mode 2) ueber LM Studio mit HA-MCP-Server.
 
-    Voraussetzungen (vom Nutzer einzurichten):
-    - LM Studio laeuft und Server ist aktiviert (Developer Tab).
-    - %USERPROFILE%\\.lmstudio\\mcp.json enthaelt den HA-MCP-Server inkl.
-      "Authorization: Bearer <Long-Lived Access Token>".
-    - LM Studio Server-Auth ist aktiviert; API-Key steht in LMSTUDIO_API_KEY.
-    - Ein Tool-faehiges Modell ist geladen.
+    Uebergibt den HA-MCP-Server als ephemeral integration direkt im API-Request,
+    damit LM Studio die MCP-Tools kennt und aufrufen kann.
 
-    LM Studio entscheidet intern, welche MCP-Tools aufgerufen werden; wir sehen
-    nur den finalen Antworttext. Entity-Whitelisting und Ausfuehrung laufen
-    vollstaendig auf HA-/LM-Studio-Seite.
+    Voraussetzungen in LM Studio:
+    - Developer Tab -> Server laeuft auf 0.0.0.0:1234
+    - Server Settings -> "Allow per-request MCPs" aktiviert
+    - Server Settings -> API-Auth aktiviert, Key in LMSTUDIO_API_KEY
+    - Ein Tool-faehiges Modell geladen (z.B. Qwen2.5-Instruct >=7B)
     """
     system = (
         "Du bist ein Home-Assistant-Assistent mit Zugriff auf MCP-Tools. "
@@ -35,6 +34,16 @@ def fallback_via_mcp(transcript: str, chat_id: int = 0) -> str | None:
             {"role": "user", "content": transcript},
         ],
         "temperature": LMSTUDIO_TEMPERATURE,
+        # MCP-Server als ephemeral integration mitgeben — sonst kennt das Modell keine Tools.
+        # Benoetigt "Allow per-request MCPs" in LM Studio Server Settings.
+        "integrations": [
+            {
+                "type": "ephemeral_mcp",
+                "server_label": "home-assistant",
+                "server_url": f"{HA_URL}/api/mcp",
+                "headers": {"Authorization": f"Bearer {HA_TOKEN}"},
+            }
+        ],
     }
 
     headers = {"Content-Type": "application/json"}
@@ -43,8 +52,7 @@ def fallback_via_mcp(transcript: str, chat_id: int = 0) -> str | None:
 
     logger.info(
         f"[LM Studio Fallback] Transcript: '{transcript}' | "
-        f"Server: {LMSTUDIO_URL} | Modell: {LMSTUDIO_MODEL} | "
-        f"Auth: {'ja' if LMSTUDIO_API_KEY else 'nein'}"
+        f"MCP: {HA_URL}/api/mcp | Modell: {LMSTUDIO_MODEL}"
     )
 
     response = None
