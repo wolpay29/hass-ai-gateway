@@ -41,6 +41,7 @@ async def _process_command(update, context, transcript: str):
             f"'{triggering.get('entity_id', '?')}' — wechsel zu Mode {FALLBACK_MODE}"
         )
         if FALLBACK_MODE == 2:
+            await update.message.reply_text("🔍 Nicht in Entity-Config gefunden, nutze MCP-Modus...")
             mcp_reply = fallback_via_mcp(transcript, chat_id=chat_id)
             if mcp_reply:
                 logger.info(f"[Dispatch] chat={chat_id} | Mode 2 lieferte Antwort")
@@ -62,6 +63,7 @@ async def _process_command(update, context, transcript: str):
         )
         # Kein Treffer in entities.yaml -> je nach FALLBACK_MODE weitermachen
         if FALLBACK_MODE == 1:
+            await update.message.reply_text("🔍 Nicht in Entity-Config gefunden, suche Entities manuell...")
             # REST-Fallback: alle HA-Entities holen und LLM mit Live-Liste fragen
             fallback_states = get_all_states(
                 FALLBACK_REST_DOMAINS or None,
@@ -89,6 +91,7 @@ async def _process_command(update, context, transcript: str):
                 )
                 return
         elif FALLBACK_MODE == 2:
+            await update.message.reply_text("🔍 Nicht in Entity-Config gefunden, nutze MCP-Modus...")
             # MCP-Fallback: LM Studio macht alles (Tool-Auswahl, Ausfuehrung, Antwort)
             mcp_reply = fallback_via_mcp(transcript, chat_id=chat_id)
             if mcp_reply:
