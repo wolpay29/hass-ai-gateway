@@ -11,7 +11,7 @@ from bot.llm import (
     parse_command, parse_command_with_states, parse_command_rag,
     format_state_reply, _load_entities,
     get_recent_user_messages, get_recent_assistant_replies,
-    append_execution_summary,
+    append_execution_summary, get_history_snapshot,
 )
 from bot.llm_lmstudio import fallback_via_mcp
 from bot.ha import call_service, get_state, get_all_states
@@ -68,6 +68,11 @@ async def _process_command(update, context, transcript: str):
         f"| Transcript: '{transcript}'"
     )
 
+    # Snapshot history BEFORE the primary LLM path runs and appends the current
+    # transcript. The snapshot is passed to the REST fallback so it gets prior
+    # context without duplicating the current transcript.
+    history_snapshot = get_history_snapshot(chat_id)
+
     command = _resolve_command(transcript, chat_id)
 
     if not command:
@@ -97,7 +102,7 @@ async def _process_command(update, context, transcript: str):
                 f"[Fallback Mode 1 / REST] chat={chat_id} | needs_fallback-Pfad | "
                 f"{len(fallback_states)} Live-Entities von HA geladen"
             )
-            fb = parse_command_with_states(transcript, fallback_states, chat_id=chat_id)
+            fb = parse_command_with_states(transcript, fallback_states, chat_id=chat_id, prior_history=history_snapshot)
             # Nur weitermachen wenn die Live-Liste echte ausführbare Actions liefert
             if fb and fb.get("actions") and not any(
                 a.get("action") == "needs_fallback" for a in fb["actions"]
@@ -151,7 +156,7 @@ async def _process_command(update, context, transcript: str):
                 f"{len(fallback_states)} Live-Entities von HA geladen"
             )
             fb = parse_command_with_states(
-                transcript, fallback_states, chat_id=chat_id
+                transcript, fallback_states, chat_id=chat_id, prior_history=history_snapshot
             )
             if fb and fb.get("actions"):
                 logger.info(

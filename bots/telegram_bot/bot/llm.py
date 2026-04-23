@@ -160,6 +160,13 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         return None
 
 
+def get_history_snapshot(chat_id: int) -> list:
+    """Return a shallow copy of the stored history before the current turn is added."""
+    if LLM_HISTORY_SIZE <= 0 or chat_id == 0:
+        return []
+    return list(_history.get(chat_id, []))
+
+
 def get_recent_user_messages(chat_id: int) -> list[str]:
     """Return all stored user messages from history for this chat (oldest first)."""
     if LLM_HISTORY_SIZE <= 0 or chat_id == 0:
@@ -362,7 +369,7 @@ WICHTIG:
         return None
 
 
-def parse_command_with_states(transcript: str, states: list[dict], chat_id: int = 0) -> dict | None:
+def parse_command_with_states(transcript: str, states: list[dict], chat_id: int = 0, prior_history: list | None = None) -> dict | None:
     """REST-Fallback (Mode 1): nutzt Live-Entities aus HA statt entities.yaml.
 
     Gleiches JSON-Output-Format wie parse_command(). entity_list wird aus den
@@ -407,9 +414,11 @@ WICHTIG: entity_id MUSS exakt aus der obigen Live-Liste stammen. Niemals erfinde
     if LMSTUDIO_NO_THINK:
         system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
 
+    history = prior_history or []
+
     logger.info(
         f"[LLM Fallback REST] Transcript: '{transcript}' | Entities: {len(states)} | "
-        f"Modell: {LMSTUDIO_MODEL}"
+        f"Modell: {LMSTUDIO_MODEL} | History: {len(history) // 2}"
     )
 
     try:
@@ -418,6 +427,7 @@ WICHTIG: entity_id MUSS exakt aus der obigen Live-Liste stammen. Niemals erfinde
             "model": LMSTUDIO_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
+                *history,
                 {"role": "user", "content": transcript},
             ],
             "temperature": LMSTUDIO_TEMPERATURE,
