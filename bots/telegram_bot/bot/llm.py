@@ -7,7 +7,8 @@ from pathlib import Path
 from bot.config import (
     LMSTUDIO_URL, LMSTUDIO_MODEL, LMSTUDIO_TIMEOUT, LMSTUDIO_API_KEY,
     LMSTUDIO_TEMPERATURE, LMSTUDIO_NO_THINK,
-    LLM_HISTORY_SIZE, MAX_ACTIONS_PER_COMMAND
+    LLM_HISTORY_SIZE, MAX_ACTIONS_PER_COMMAND,
+    HISTORY_INCLUDE_ASSISTANT,
 )
 
 logger = logging.getLogger(__name__)
@@ -134,15 +135,17 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
 
         result["actions"] = validated_actions
 
-        # History speichern (nur wenn aktiviert)
+        # History speichern (nur wenn aktiviert).
+        # Assistant-Turn nur speichern wenn HISTORY_INCLUDE_ASSISTANT=true.
         if LLM_HISTORY_SIZE > 0 and chat_id != 0:
             history.append({"role": "user", "content": transcript})
-            history.append({"role": "assistant", "content": content})
-            max_entries = LLM_HISTORY_SIZE * 2
+            if HISTORY_INCLUDE_ASSISTANT:
+                history.append({"role": "assistant", "content": content})
+            max_entries = LLM_HISTORY_SIZE * (2 if HISTORY_INCLUDE_ASSISTANT else 1)
             if len(history) > max_entries:
                 history = history[-max_entries:]
             _history[chat_id] = history
-            logger.info(f"[LLM] History für chat {chat_id}: {len(history)//2} Austausche gespeichert")
+            logger.info(f"[LLM] History fuer chat {chat_id}: {len(history)} Eintraege gespeichert")
 
         return result
 
@@ -165,10 +168,11 @@ def get_recent_user_messages(chat_id: int) -> list[str]:
 
 
 def get_recent_assistant_replies(chat_id: int) -> list[str]:
-    """Return natural-language 'reply' fields from stored assistant turns (oldest first).
+    """Return stored assistant context (oldest first).
 
-    Assistant turns are raw JSON in history. This extracts just the 'reply' text,
-    which typically names the entities acted on ('...Licht bei Paul und Max...').
+    Assistant turns are raw JSON in history. This pulls out the 'reply' text
+    plus anything appended after the JSON (e.g. execution summaries written by
+    append_execution_summary() when HISTORY_APPEND_EXECUTIONS is active).
     """
     if LLM_HISTORY_SIZE <= 0 or chat_id == 0:
         return []
@@ -176,17 +180,41 @@ def get_recent_assistant_replies(chat_id: int) -> list[str]:
     for m in _history.get(chat_id, []):
         if m["role"] != "assistant":
             continue
-        match = re.search(r'\{.*\}', m["content"], re.DOTALL)
-        if not match:
-            continue
-        try:
-            parsed = json.loads(match.group())
-        except json.JSONDecodeError:
-            continue
-        reply = (parsed.get("reply") or "").strip()
-        if reply:
-            out.append(reply)
+        content = m["content"]
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if match:
+            try:
+                parsed = json.loads(match.group())
+                reply = (parsed.get("reply") or "").strip()
+                if reply:
+                    out.append(reply)
+            except json.JSONDecodeError:
+                pass
+            trailing = content[match.end():].strip()
+            if trailing:
+                out.append(trailing)
+        else:
+            stripped = content.strip()
+            if stripped:
+                out.append(stripped)
     return out
+
+
+def append_execution_summary(chat_id: int, summary: str) -> None:
+    """Append an execution-summary line to the most recent assistant entry in history.
+
+    Called from handlers.py after actions run. No-op if history is disabled,
+    the summary is empty, or there is no assistant turn to attach to.
+    """
+    if LLM_HISTORY_SIZE <= 0 or chat_id == 0 or not summary:
+        return
+    history = _history.get(chat_id)
+    if not history:
+        return
+    for msg in reversed(history):
+        if msg["role"] == "assistant":
+            msg["content"] = msg["content"].rstrip() + "\n" + summary
+            return
 
 
 def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -> dict | None:
@@ -309,15 +337,17 @@ WICHTIG:
 
         result["actions"] = validated
 
-        # History speichern (gleiche Logik wie parse_command)
+        # History speichern (gleiche Logik wie parse_command).
+        # Assistant-Turn nur speichern wenn HISTORY_INCLUDE_ASSISTANT=true.
         if LLM_HISTORY_SIZE > 0 and chat_id != 0:
             history.append({"role": "user", "content": transcript})
-            history.append({"role": "assistant", "content": content})
-            max_entries = LLM_HISTORY_SIZE * 2
+            if HISTORY_INCLUDE_ASSISTANT:
+                history.append({"role": "assistant", "content": content})
+            max_entries = LLM_HISTORY_SIZE * (2 if HISTORY_INCLUDE_ASSISTANT else 1)
             if len(history) > max_entries:
                 history = history[-max_entries:]
             _history[chat_id] = history
-            logger.info(f"[LLM RAG] History fuer chat {chat_id}: {len(history) // 2} Austausche gespeichert")
+            logger.info(f"[LLM RAG] History fuer chat {chat_id}: {len(history)} Eintraege gespeichert")
 
         return result
 

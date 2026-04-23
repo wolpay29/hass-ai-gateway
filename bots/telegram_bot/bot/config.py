@@ -81,10 +81,17 @@ RAG_EMBED_TIMEOUT = int(os.getenv("RAG_EMBED_TIMEOUT", str(LMSTUDIO_TIMEOUT)))
 RAG_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", "text-embedding-nomic-embed-text-v2-moe")
 RAG_EMBED_DIM = int(os.getenv("RAG_EMBED_DIM", "768"))
 
-# If true, include assistant replies (not just user turns) in the RAG embed
-# enrichment. The assistant often names entities explicitly ("...bei Paul und Max..."),
-# which gives RAG a stronger signal for anaphoric follow-ups.
-RAG_ENRICH_WITH_ASSISTANT = os.getenv("RAG_ENRICH_WITH_ASSISTANT", "true").lower() == "true"
+# UNIVERSAL (both RAG modes): if true, assistant turns are stored in history so
+# the LLM sees its own prior replies on the next turn. In RAG mode those replies
+# are additionally used to enrich the embed query for short follow-ups. If false,
+# only user turns are stored — the LLM has no memory of what it previously said.
+HISTORY_INCLUDE_ASSISTANT = os.getenv("HISTORY_INCLUDE_ASSISTANT", "true").lower() == "true"
+
+# UNIVERSAL (both RAG modes): if true, the execution summary
+# ("ausgefuehrt: turn_on -> light.licht_paul, ...") is appended to the stored
+# assistant turn. Requires HISTORY_INCLUDE_ASSISTANT=true — otherwise there is
+# no assistant turn to append to.
+HISTORY_APPEND_EXECUTIONS = os.getenv("HISTORY_APPEND_EXECUTIONS", "false").lower() == "true"
 
 # Fallback-Modus wenn parse_command() keine Action findet:
 #   0 = aus (bisheriges Verhalten, keine Treffer -> Fehlermeldung)
