@@ -105,11 +105,3 @@ jobs:
             bots/telegram_bot/coverage-report/
           retention-days: 30
 
-      - name: Publish test results (inline PR check)
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: pytest results
-          path: bots/telegram_bot/test-results.xml
-          reporter: java-junit
-          fail-on-error: true
