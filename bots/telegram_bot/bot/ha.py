@@ -71,6 +71,15 @@ def get_all_states(domains: list[str] | None = None, max_entities: int = 0) -> l
     return out
 
 
+def get_ha_state(entity_id: str) -> str | None:
+    result = get_state(entity_id)
+    return result.get("state") if result else None
+
+
+def trigger_automation(entity_id: str) -> bool:
+    return call_service("automation", "trigger", entity_id)
+
+
 def get_state(entity_id: str) -> dict | None:
     headers = {
         "Authorization": f"Bearer {HA_TOKEN}",
