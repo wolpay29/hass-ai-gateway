@@ -5,9 +5,13 @@ from bot.voice import ensure_voice_dir, transcribe_audio
 from bot.config import (
     VOICE_REPLY_WITH_TRANSCRIPT, MAX_ACTIONS_PER_COMMAND,
     FALLBACK_MODE, FALLBACK_REST_DOMAINS, FALLBACK_REST_MAX_ENTITIES,
-    RAG_ENABLED,
+    RAG_ENABLED, RAG_ENRICH_WITH_ASSISTANT,
 )
-from bot.llm import parse_command, parse_command_with_states, parse_command_rag, format_state_reply, _load_entities, get_recent_user_messages
+from bot.llm import (
+    parse_command, parse_command_with_states, parse_command_rag,
+    format_state_reply, _load_entities,
+    get_recent_user_messages, get_recent_assistant_replies,
+)
 from bot.llm_lmstudio import fallback_via_mcp
 from bot.ha import call_service, get_state, get_all_states
 
@@ -38,9 +42,9 @@ def _resolve_command(transcript: str, chat_id: int) -> dict | None:
 
             embed_query = transcript
             if len(transcript.split()) <= _RAG_ENRICH_MAX_WORDS:
-                recent = get_recent_user_messages(chat_id)
-                # filter out the current transcript in case it's already in history
-                context = [m for m in recent if m != transcript]
+                context: list[str] = [m for m in get_recent_user_messages(chat_id) if m != transcript]
+                if RAG_ENRICH_WITH_ASSISTANT:
+                    context.extend(get_recent_assistant_replies(chat_id))
                 if context:
                     embed_query = " | ".join(context) + " → " + transcript
                     logger.info(f"[Dispatch] RAG embed query angereichert: '{embed_query}'")

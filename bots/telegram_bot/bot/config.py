@@ -81,6 +81,11 @@ RAG_EMBED_TIMEOUT = int(os.getenv("RAG_EMBED_TIMEOUT", str(LMSTUDIO_TIMEOUT)))
 RAG_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", "text-embedding-nomic-embed-text-v2-moe")
 RAG_EMBED_DIM = int(os.getenv("RAG_EMBED_DIM", "768"))
 
+# If true, include assistant replies (not just user turns) in the RAG embed
+# enrichment. The assistant often names entities explicitly ("...bei Paul und Max..."),
+# which gives RAG a stronger signal for anaphoric follow-ups.
+RAG_ENRICH_WITH_ASSISTANT = os.getenv("RAG_ENRICH_WITH_ASSISTANT", "true").lower() == "true"
+
 # Fallback-Modus wenn parse_command() keine Action findet:
 #   0 = aus (bisheriges Verhalten, keine Treffer -> Fehlermeldung)
 #   1 = einfacher Fallback: alle HA-Entities per REST holen und LLM erneut fragen

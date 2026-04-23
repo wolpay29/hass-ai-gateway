@@ -164,6 +164,31 @@ def get_recent_user_messages(chat_id: int) -> list[str]:
     return [m["content"] for m in _history.get(chat_id, []) if m["role"] == "user"]
 
 
+def get_recent_assistant_replies(chat_id: int) -> list[str]:
+    """Return natural-language 'reply' fields from stored assistant turns (oldest first).
+
+    Assistant turns are raw JSON in history. This extracts just the 'reply' text,
+    which typically names the entities acted on ('...Licht bei Paul und Max...').
+    """
+    if LLM_HISTORY_SIZE <= 0 or chat_id == 0:
+        return []
+    out: list[str] = []
+    for m in _history.get(chat_id, []):
+        if m["role"] != "assistant":
+            continue
+        match = re.search(r'\{.*\}', m["content"], re.DOTALL)
+        if not match:
+            continue
+        try:
+            parsed = json.loads(match.group())
+        except json.JSONDecodeError:
+            continue
+        reply = (parsed.get("reply") or "").strip()
+        if reply:
+            out.append(reply)
+    return out
+
+
 def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -> dict | None:
     """RAG path: entity list with explicit per-entity actions and optional meta hints.
 
