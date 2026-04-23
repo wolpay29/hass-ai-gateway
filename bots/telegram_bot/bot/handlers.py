@@ -7,7 +7,7 @@ from bot.config import (
     FALLBACK_MODE, FALLBACK_REST_DOMAINS, FALLBACK_REST_MAX_ENTITIES,
     RAG_ENABLED,
 )
-from bot.llm import parse_command, parse_command_with_states, parse_command_rag, format_state_reply, _load_entities, get_last_user_message
+from bot.llm import parse_command, parse_command_with_states, parse_command_rag, format_state_reply, _load_entities, get_recent_user_messages
 from bot.llm_lmstudio import fallback_via_mcp
 from bot.ha import call_service, get_state, get_all_states
 
@@ -38,9 +38,11 @@ def _resolve_command(transcript: str, chat_id: int) -> dict | None:
 
             embed_query = transcript
             if len(transcript.split()) <= _RAG_ENRICH_MAX_WORDS:
-                last_user = get_last_user_message(chat_id)
-                if last_user and last_user != transcript:
-                    embed_query = f"{last_user} → {transcript}"
+                recent = get_recent_user_messages(chat_id)
+                # filter out the current transcript in case it's already in history
+                context = [m for m in recent if m != transcript]
+                if context:
+                    embed_query = " | ".join(context) + " → " + transcript
                     logger.info(f"[Dispatch] RAG embed query angereichert: '{embed_query}'")
 
             rag_entities = rag_query(embed_query)

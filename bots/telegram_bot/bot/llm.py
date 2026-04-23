@@ -157,14 +157,11 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         return None
 
 
-def get_last_user_message(chat_id: int) -> str:
-    """Return the last user message stored in history for this chat, or empty string."""
+def get_recent_user_messages(chat_id: int) -> list[str]:
+    """Return all stored user messages from history for this chat (oldest first)."""
     if LLM_HISTORY_SIZE <= 0 or chat_id == 0:
-        return ""
-    for msg in reversed(_history.get(chat_id, [])):
-        if msg["role"] == "user":
-            return msg["content"]
-    return ""
+        return []
+    return [m["content"] for m in _history.get(chat_id, []) if m["role"] == "user"]
 
 
 def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -> dict | None:
