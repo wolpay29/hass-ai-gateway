@@ -1,0 +1,18 @@
+# Raspberry Pi voice client dependencies
+# Install on the RPi with:  pip install -r requirements.txt
+
+# Wake word detection (pulls ONNX models automatically on first run)
+openwakeword>=0.6.0
+
+# Audio I/O
+sounddevice>=0.4.6
+numpy>=1.24
+
+# HTTP client
+requests>=2.31
+
+# Offline TTS
+pyttsx3>=2.90
+
+# Required by pyttsx3 on Linux/RPi (install system package first):
+#   sudo apt install espeak espeak-data libespeak-dev
