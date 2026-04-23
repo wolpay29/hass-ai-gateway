@@ -7,8 +7,8 @@ Wants=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/smarthome/assistant/services/voice_gateway
-Environment="PATH=/root/smarthome/assistant/services/telegram_bot/telegram_bot_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-ExecStart=/root/smarthome/assistant/services/telegram_bot/telegram_bot_env/bin/python /root/smarthome/assistant/services/voice_gateway/main.py
+ExecStart=/root/smarthome/assistant/services/voice_gateway/voice_gateway_env/bin/python /root/smarthome/assistant/services/voice_gateway/main.py
+Environment="PATH=/root/smarthome/assistant/services/voice_gateway/voice_gateway_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Restart=always
 RestartSec=10
 StandardOutput=journal
