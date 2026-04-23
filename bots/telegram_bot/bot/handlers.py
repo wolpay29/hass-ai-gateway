@@ -7,7 +7,7 @@ from bot.config import (
     FALLBACK_MODE, FALLBACK_REST_DOMAINS, FALLBACK_REST_MAX_ENTITIES,
     RAG_ENABLED,
 )
-from bot.llm import parse_command, parse_command_with_states, parse_command_rag, format_state_reply, _load_entities
+from bot.llm import parse_command, parse_command_with_states, parse_command_rag, format_state_reply, _load_entities, get_last_user_message
 from bot.llm_lmstudio import fallback_via_mcp
 from bot.ha import call_service, get_state, get_all_states
 
@@ -16,16 +16,34 @@ logger = logging.getLogger(__name__)
 _FALLBACK_LABELS = {0: "0 / OFF", 1: "1 / REST", 2: "2 / MCP"}
 
 
+_RAG_ENRICH_MAX_WORDS = 5  # enrich embed query with history context for short transcripts
+
+
 def _resolve_command(transcript: str, chat_id: int) -> dict | None:
     """Return a command dict using RAG (if enabled) or the legacy entities.yaml path.
 
     RAG errors are caught here and logged; the function then falls back to the
     legacy path so the rest of _process_command is unaffected.
+
+    When RAG is active and the transcript is short (likely a follow-up like
+    "und wieder aus"), the embed query is enriched with the last user message
+    from history so the KNN search finds the correct entity rather than
+    matching on stray words (e.g. "aus" in entity IDs).
+    The LLM still receives the original transcript + full history — only the
+    embedding step uses the enriched query.
     """
     if RAG_ENABLED:
         try:
             from bot.rag.index import query as rag_query
-            rag_entities = rag_query(transcript)
+
+            embed_query = transcript
+            if len(transcript.split()) <= _RAG_ENRICH_MAX_WORDS:
+                last_user = get_last_user_message(chat_id)
+                if last_user and last_user != transcript:
+                    embed_query = f"{last_user} → {transcript}"
+                    logger.info(f"[Dispatch] RAG embed query angereichert: '{embed_query}'")
+
+            rag_entities = rag_query(embed_query)
             if rag_entities:
                 logger.info(f"[Dispatch] RAG-Pfad | {len(rag_entities)} Kandidaten")
                 return parse_command_rag(transcript, rag_entities, chat_id=chat_id)

@@ -157,6 +157,16 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         return None
 
 
+def get_last_user_message(chat_id: int) -> str:
+    """Return the last user message stored in history for this chat, or empty string."""
+    if LLM_HISTORY_SIZE <= 0 or chat_id == 0:
+        return ""
+    for msg in reversed(_history.get(chat_id, [])):
+        if msg["role"] == "user":
+            return msg["content"]
+    return ""
+
+
 def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -> dict | None:
     """RAG path: entity list with explicit per-entity actions and optional meta hints.
 
@@ -218,9 +228,14 @@ WICHTIG:
     if LMSTUDIO_NO_THINK:
         system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
 
+    # History aufbauen (gleiche Logik wie parse_command)
+    history = []
+    if LLM_HISTORY_SIZE > 0 and chat_id != 0:
+        history = _history.get(chat_id, [])
+
     logger.info(
         f"[LLM RAG] Transcript: '{transcript}' | Entities: {len(entities)} | "
-        f"Modell: {LMSTUDIO_MODEL}"
+        f"Modell: {LMSTUDIO_MODEL} | History: {len(history) // 2}"
     )
 
     try:
@@ -229,6 +244,7 @@ WICHTIG:
             "model": LMSTUDIO_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
+                *history,
                 {"role": "user", "content": transcript},
             ],
             "temperature": LMSTUDIO_TEMPERATURE,
@@ -270,6 +286,17 @@ WICHTIG:
                 validated[i]["ignored"] = True
 
         result["actions"] = validated
+
+        # History speichern (gleiche Logik wie parse_command)
+        if LLM_HISTORY_SIZE > 0 and chat_id != 0:
+            history.append({"role": "user", "content": transcript})
+            history.append({"role": "assistant", "content": content})
+            max_entries = LLM_HISTORY_SIZE * 2
+            if len(history) > max_entries:
+                history = history[-max_entries:]
+            _history[chat_id] = history
+            logger.info(f"[LLM RAG] History fuer chat {chat_id}: {len(history) // 2} Austausche gespeichert")
+
         return result
 
     except requests.exceptions.HTTPError as e:
