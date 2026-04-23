@@ -157,6 +157,132 @@ WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine 
         return None
 
 
+def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -> dict | None:
+    """RAG path: entity list with explicit per-entity actions and optional meta hints.
+
+    Expected shape of each dict in `entities`:
+        {entity_id, friendly_name, domain, actions: list[str], meta: str}
+
+    Unlike parse_command_with_states() this prompt does NOT describe
+    domain-to-action rules generically — each entity lists its own valid
+    actions directly. Only `needs_fallback` is explained here, because it
+    is a control signal rather than a real HA action and is always available.
+    """
+    if not entities:
+        logger.warning("[LLM RAG] Keine RAG-Entities uebergeben")
+        return None
+
+    valid_ids = {e["entity_id"] for e in entities}
+
+    def _fmt(e: dict) -> str:
+        line = (
+            f'- {e["entity_id"]} | name: {e.get("friendly_name") or "-"} | '
+            f'actions: {", ".join(e.get("actions", [])) or "-"}'
+        )
+        if e.get("meta"):
+            line += f' | note: {e["meta"]}'
+        return line
+
+    entity_list = "\n".join(_fmt(e) for e in entities)
+
+    system_prompt = f"""Smart Home Assistent. Antworte NUR mit JSON, kein anderer Text.
+Du erhaeltst eine vorgefilterte Liste relevanter Home Assistant Entities.
+Jede Entity hat ihre erlaubten Aktionen bereits im Feld "actions" aufgelistet —
+waehle NUR aus diesen Aktionen.
+
+Geraete:
+{entity_list}
+
+Format IMMER so:
+{{"reply":"...", "actions":[{{"entity_id":"...","action":"...","domain":"..."}}]}}
+
+Kein Treffer:
+{{"reply":"...", "actions":[]}}
+
+Spezialfall "needs_fallback":
+Wenn der Nutzer eine Aktion mit Parametern verlangt, die nicht direkt ausfuehrbar
+ist (Temperatur setzen, Helligkeit, Rollo-Position, Modus, Prozent-Abfragen auf
+Switch-Entities, ...), gib action: "needs_fallback" zurueck. Das gilt auch wenn
+die Parameter-Aktion nicht in der actions-Liste der Entity steht — needs_fallback
+ist immer erlaubt.
+
+WICHTIG:
+- entity_id MUSS exakt aus der obigen Liste stammen. Niemals erfinden.
+- "action" MUSS entweder in der actions-Liste der gewaehlten Entity stehen
+  ODER "needs_fallback" sein.
+- Beachte das optionale "note"-Feld einer Entity als zusaetzlichen Hinweis.
+- "domain" ist der Teil vor dem Punkt der entity_id.
+- "reply" ist eine kurze freundliche Antwort auf Deutsch.
+"""
+
+    if LMSTUDIO_NO_THINK:
+        system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
+
+    logger.info(
+        f"[LLM RAG] Transcript: '{transcript}' | Entities: {len(entities)} | "
+        f"Modell: {LMSTUDIO_MODEL}"
+    )
+
+    try:
+        endpoint = f"{LMSTUDIO_URL}/v1/chat/completions"
+        payload = {
+            "model": LMSTUDIO_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": transcript},
+            ],
+            "temperature": LMSTUDIO_TEMPERATURE,
+        }
+        response = requests.post(endpoint, json=payload, headers=_lmstudio_headers(), timeout=LMSTUDIO_TIMEOUT)
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        logger.info(f"[LLM RAG] Antwort raw: {content}")
+
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if not match:
+            logger.error("[LLM RAG] Kein JSON gefunden")
+            return None
+
+        result = json.loads(match.group())
+
+        validated: list[dict] = []
+        for act in result.get("actions", []):
+            eid = act.get("entity_id")
+            if act.get("action") == "needs_fallback":
+                validated.append(act)
+                logger.info(f"[LLM RAG] needs_fallback fuer '{eid or '?'}'")
+                continue
+            if not eid:
+                continue
+            if eid not in valid_ids:
+                logger.warning(f"[LLM RAG] Halluzinierte Entity '{eid}' – ignoriert")
+                continue
+            if not act.get("domain") and "." in eid:
+                act["domain"] = eid.split(".", 1)[0]
+            validated.append(act)
+
+        if MAX_ACTIONS_PER_COMMAND > 0 and len(validated) > MAX_ACTIONS_PER_COMMAND:
+            logger.warning(
+                f"[LLM RAG] Zu viele Aktionen ({len(validated)}), "
+                f"begrenze auf {MAX_ACTIONS_PER_COMMAND}"
+            )
+            for i in range(MAX_ACTIONS_PER_COMMAND, len(validated)):
+                validated[i]["ignored"] = True
+
+        result["actions"] = validated
+        return result
+
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"[LLM RAG] HTTP-Fehler: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        logger.error(f"[LLM RAG] JSON-Parsing fehlgeschlagen: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"[LLM RAG] Fehler: {e}")
+        return None
+
+
 def parse_command_with_states(transcript: str, states: list[dict], chat_id: int = 0) -> dict | None:
     """REST-Fallback (Mode 1): nutzt Live-Entities aus HA statt entities.yaml.
 

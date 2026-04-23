@@ -1,17 +1,39 @@
+import asyncio
 import logging
 
 from bot.voice import ensure_voice_dir, transcribe_audio
 from bot.config import (
     VOICE_REPLY_WITH_TRANSCRIPT, MAX_ACTIONS_PER_COMMAND,
     FALLBACK_MODE, FALLBACK_REST_DOMAINS, FALLBACK_REST_MAX_ENTITIES,
+    RAG_ENABLED,
 )
-from bot.llm import parse_command, parse_command_with_states, format_state_reply, _load_entities
+from bot.llm import parse_command, parse_command_with_states, parse_command_rag, format_state_reply, _load_entities
 from bot.llm_lmstudio import fallback_via_mcp
 from bot.ha import call_service, get_state, get_all_states
 
 logger = logging.getLogger(__name__)
 
 _FALLBACK_LABELS = {0: "0 / OFF", 1: "1 / REST", 2: "2 / MCP"}
+
+
+def _resolve_command(transcript: str, chat_id: int) -> dict | None:
+    """Return a command dict using RAG (if enabled) or the legacy entities.yaml path.
+
+    RAG errors are caught here and logged; the function then falls back to the
+    legacy path so the rest of _process_command is unaffected.
+    """
+    if RAG_ENABLED:
+        try:
+            from bot.rag.index import query as rag_query
+            rag_entities = rag_query(transcript)
+            if rag_entities:
+                logger.info(f"[Dispatch] RAG-Pfad | {len(rag_entities)} Kandidaten")
+                return parse_command_rag(transcript, rag_entities, chat_id=chat_id)
+            logger.warning("[Dispatch] RAG lieferte keine Kandidaten — Legacy-Pfad")
+        except Exception as e:
+            logger.error(f"[Dispatch] RAG fehlgeschlagen: {e} — Legacy-Pfad")
+
+    return parse_command(transcript, chat_id=chat_id)
 
 
 async def _process_command(update, context, transcript: str):
@@ -21,7 +43,7 @@ async def _process_command(update, context, transcript: str):
         f"| Transcript: '{transcript}'"
     )
 
-    command = parse_command(transcript, chat_id=chat_id)
+    command = _resolve_command(transcript, chat_id)
 
     if not command:
         logger.warning(f"[Dispatch] chat={chat_id} | parse_command lieferte nichts zurueck")
@@ -240,3 +262,25 @@ async def handle_text(update, context):
     text = update.message.text.strip()
     await update.message.reply_text("🤖 Analysiere...")
     await _process_command(update, context, text)
+
+
+async def handle_rag_rebuild(update, context):
+    if not RAG_ENABLED:
+        await update.message.reply_text("⚠️ RAG_ENABLED ist nicht aktiv.")
+        return
+
+    await update.message.reply_text("🔄 Starte RAG-Index Rebuild ...")
+
+    try:
+        from bot.rag.index import build as rag_build, status as rag_status
+        loop = asyncio.get_event_loop()
+        count = await loop.run_in_executor(None, rag_build)
+        info = rag_status()
+        await update.message.reply_text(
+            f"✅ RAG-Index bereit\n"
+            f"Entities: {count}\n"
+            f"Zuletzt indiziert: {info.get('last_indexed', '?')}"
+        )
+    except Exception as e:
+        logger.error(f"[RAG Rebuild] Fehler: {e}")
+        await update.message.reply_text(f"❌ Rebuild fehlgeschlagen: {e}")

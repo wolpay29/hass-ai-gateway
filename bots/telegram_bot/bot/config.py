@@ -66,6 +66,21 @@ else:
 LLM_HISTORY_SIZE = int(os.getenv("LLM_HISTORY_SIZE", "0"))
 MAX_ACTIONS_PER_COMMAND = int(os.getenv("MAX_ACTIONS_PER_COMMAND", "0"))
 
+# RAG mode — replaces the entities.yaml -> LLM step when enabled.
+# Set RAG_ENABLED=false to keep the legacy behaviour completely unchanged.
+RAG_ENABLED = os.getenv("RAG_ENABLED", "false").lower() == "true"
+RAG_DB_PATH = os.getenv("RAG_DB_PATH", "data/rag/entities.sqlite")
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "15"))
+RAG_KEYWORD_BOOST = float(os.getenv("RAG_KEYWORD_BOOST", "0.3"))
+
+# Embedding model host — separate from chat LM Studio so you can use a different
+# server for embeddings if you want. Defaults fall back to the chat LM Studio.
+RAG_EMBED_URL = os.getenv("RAG_EMBED_URL", LMSTUDIO_URL)
+RAG_EMBED_API_KEY = os.getenv("RAG_EMBED_API_KEY", LMSTUDIO_API_KEY)
+RAG_EMBED_TIMEOUT = int(os.getenv("RAG_EMBED_TIMEOUT", str(LMSTUDIO_TIMEOUT)))
+RAG_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", "text-embedding-nomic-embed-text-v2-moe")
+RAG_EMBED_DIM = int(os.getenv("RAG_EMBED_DIM", "768"))
+
 # Fallback-Modus wenn parse_command() keine Action findet:
 #   0 = aus (bisheriges Verhalten, keine Treffer -> Fehlermeldung)
 #   1 = einfacher Fallback: alle HA-Entities per REST holen und LLM erneut fragen
@@ -75,7 +90,7 @@ FALLBACK_MODE = int(os.getenv("FALLBACK_MODE", "0"))
 # Mode 1 - REST Fallback Filter/Limit.
 # Leer/"{}"/"[]" bei DOMAINS = kein Domain-Filter (alle werden uebergeben).
 # 0 bei MAX_ENTITIES = kein Limit.
-FALLBACK_REST_MAX_ENTITIES = int(os.getenv("FALLBACK_REST_MAX_ENTITIES", "150"))
+FALLBACK_REST_MAX_ENTITIES = int(os.getenv("FALLBACK_REST_MAX_ENTITIES", "0"))
 _fb_domains_raw = os.getenv(
     "FALLBACK_REST_DOMAINS",
     "light,switch,sensor,binary_sensor,climate,automation,cover"

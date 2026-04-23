@@ -13,7 +13,7 @@ from telegram.ext import (
 from bot.config import BOT_TOKEN, CHECK_INTERVAL_SECONDS
 from bot.menu import startup_menu
 from bot.battery import check_battery, periodic_battery_check
-from bot.handlers import handle_voice, handle_text
+from bot.handlers import handle_voice, handle_text, handle_rag_rebuild
 from bot.callbacks import (
     start,
     handle_main_menu_selection,
@@ -46,6 +46,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("check_battery", check_battery))
+    app.add_handler(CommandHandler("rag_rebuild", handle_rag_rebuild))
 
     app.add_handler(MessageHandler(filters.Regex(MAIN_MENU_PATTERN), handle_main_menu_selection))
 

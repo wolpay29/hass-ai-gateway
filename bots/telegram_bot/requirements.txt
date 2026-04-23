@@ -3,3 +3,4 @@ requests
 python-dotenv
 faster-whisper
 pyyaml
+sqlite-vec
