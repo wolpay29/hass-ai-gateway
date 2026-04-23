@@ -3,7 +3,7 @@ import logging
 from telegram import ReplyKeyboardMarkup, KeyboardButton, Update
 from telegram.ext import Application, ContextTypes
 
-from bot.config import MY_CHAT_ID
+from core.config import MY_CHAT_ID
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 import logging
+import sys
+from pathlib import Path
+
+# Make `core/` importable regardless of where the script is launched from.
+# (core/ lives at the project root, two levels up from this file.)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from telegram import Update
 from telegram.ext import (
@@ -10,7 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from bot.config import BOT_TOKEN, CHECK_INTERVAL_SECONDS
+from core.config import BOT_TOKEN, CHECK_INTERVAL_SECONDS
 from bot.menu import startup_menu
 from bot.battery import check_battery, periodic_battery_check
 from bot.handlers import handle_voice, handle_text, handle_rag_rebuild

@@ -4,12 +4,12 @@ from pathlib import Path
 import requests
 import yaml
 
-from bot.config import (
+from core.config import (
     HA_URL, HA_TOKEN,
     RAG_DB_PATH, RAG_TOP_K, RAG_KEYWORD_BOOST, RAG_EMBED_DIM,
 )
-from bot.rag import store
-from bot.rag.embeddings import embed, embed_one
+from core.rag import store
+from core.rag.embeddings import embed, embed_one
 
 logger = logging.getLogger(__name__)
 

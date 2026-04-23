@@ -1,6 +1,6 @@
 import requests
 import logging
-from bot.config import (
+from core.config import (
     LMSTUDIO_URL, LMSTUDIO_MODEL, LMSTUDIO_API_KEY,
     LMSTUDIO_TIMEOUT, LMSTUDIO_TEMPERATURE,
     LMSTUDIO_MCP_ALLOWED_TOOLS, LMSTUDIO_CONTEXT_LENGTH,

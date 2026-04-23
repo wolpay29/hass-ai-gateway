@@ -6,9 +6,9 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/smarthome/bots/telegram_bot
-Environment="PATH=/root/smarthome/bots/telegram_bot/telegram_bot_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-ExecStart=/root/smarthome/bots/telegram_bot/telegram_bot_env/bin/python /root/smarthome/bots/telegram_bot/telegram_ha_bot.py
+WorkingDirectory=/root/smarthome/assistant/services/telegram_bot
+Environment="PATH=/root/smarthome/assistant/services/telegram_bot/telegram_bot_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/root/smarthome/assistant/services/telegram_bot/telegram_bot_env/bin/python /root/smarthome/assistant/services/telegram_bot/main.py
 Restart=always
 RestartSec=10
 StandardOutput=journal

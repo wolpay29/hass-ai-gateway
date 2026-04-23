@@ -3,8 +3,8 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from bot.config import MY_CHAT_ID, BATTERY_THRESHOLD
-from bot.ha import get_ha_state
+from core.config import MY_CHAT_ID, BATTERY_THRESHOLD
+from core.ha import get_ha_state
 from bot.menu import delete_last_bot_message, save_bot_message
 
 logger = logging.getLogger(__name__)

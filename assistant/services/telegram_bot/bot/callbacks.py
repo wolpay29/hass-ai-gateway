@@ -3,7 +3,7 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from bot.ha import trigger_automation
+from core.ha import trigger_automation
 from bot.menu import get_main_menu_keyboard, send_main_menu, save_bot_message, delete_last_bot_message
 from bot.battery import check_battery
 

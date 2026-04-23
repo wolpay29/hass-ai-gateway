@@ -1,7 +1,27 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env robustly regardless of the current working directory.
+# Priority:
+#   1. DOTENV_PATH env var (explicit override — used by the voice gateway, tests, etc.)
+#   2. The Telegram bot's .env (historical default)
+#   3. A .env next to the project root
+#   4. Whatever load_dotenv() finds walking up from CWD (fallback)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_env_candidates: list[Path] = []
+if os.getenv("DOTENV_PATH"):
+    _env_candidates.append(Path(os.environ["DOTENV_PATH"]))
+_env_candidates.extend([
+    _PROJECT_ROOT / "services" / "telegram_bot" / ".env",
+    _PROJECT_ROOT / ".env",
+])
+for _candidate in _env_candidates:
+    if _candidate.is_file():
+        load_dotenv(_candidate)
+        break
+else:
+    load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MY_CHAT_ID = int(os.getenv("MY_CHAT_ID", "0"))

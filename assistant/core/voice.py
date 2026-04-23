@@ -1,7 +1,7 @@
 import logging
 import requests
 from pathlib import Path
-from bot.config import (
+from core.config import (
     WHISPER_BACKEND,
     WHISPER_MODEL,
     WHISPER_DEVICE,

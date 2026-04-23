@@ -4,7 +4,7 @@ import json
 import re
 import logging
 from pathlib import Path
-from bot.config import (
+from core.config import (
     LMSTUDIO_URL, LMSTUDIO_MODEL, LMSTUDIO_TIMEOUT, LMSTUDIO_API_KEY,
     LMSTUDIO_TEMPERATURE, LMSTUDIO_NO_THINK,
     LLM_HISTORY_SIZE, MAX_ACTIONS_PER_COMMAND,

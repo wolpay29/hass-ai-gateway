@@ -1,6 +1,6 @@
 import requests
 import logging
-from bot.config import HA_URL, HA_TOKEN
+from core.config import HA_URL, HA_TOKEN
 
 logger = logging.getLogger(__name__)
 

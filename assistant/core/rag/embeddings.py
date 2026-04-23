@@ -1,6 +1,6 @@
 import logging
 import requests
-from bot.config import (
+from core.config import (
     RAG_EMBED_URL, RAG_EMBED_API_KEY, RAG_EMBED_TIMEOUT, RAG_EMBED_MODEL,
 )
 

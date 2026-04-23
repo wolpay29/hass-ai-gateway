@@ -1,276 +1,82 @@
+"""
+Telegram handlers — the Telegram-specific thin layer on top of core.processor.
+
+All command logic (LLM, RAG, HA calls, fallbacks, history) lives in
+core.processor. This module only:
+  - downloads Telegram voice files,
+  - sends intermediate status messages ("🎙️ Transkribiere..."),
+  - formats the processor's result dict as Markdown for Telegram.
+
+If you need to change *what* a command does, edit core/processor.py.
+If you need to change *how it looks in Telegram*, edit _format_reply() below.
+"""
 import asyncio
 import logging
 
-from bot.voice import ensure_voice_dir, transcribe_audio
-from bot.config import (
-    VOICE_REPLY_WITH_TRANSCRIPT, MAX_ACTIONS_PER_COMMAND,
-    FALLBACK_MODE, FALLBACK_REST_DOMAINS, FALLBACK_REST_MAX_ENTITIES,
-    RAG_ENABLED, HISTORY_INCLUDE_ASSISTANT, HISTORY_APPEND_EXECUTIONS,
-)
-from bot.llm import (
-    parse_command, parse_command_with_states, parse_command_rag,
-    format_state_reply, _load_entities,
-    get_recent_user_messages, get_recent_assistant_replies,
-    append_execution_summary, get_history_snapshot,
-)
-from bot.llm_lmstudio import fallback_via_mcp
-from bot.ha import call_service, get_state, get_all_states
+from core.voice import ensure_voice_dir, transcribe_audio
+from core.config import VOICE_REPLY_WITH_TRANSCRIPT, MAX_ACTIONS_PER_COMMAND, RAG_ENABLED
+from core.processor import process_transcript
 
 logger = logging.getLogger(__name__)
 
-_FALLBACK_LABELS = {0: "0 / OFF", 1: "1 / REST", 2: "2 / MCP"}
+
+# Error code → user-visible German message. Keeps all Telegram-facing text in
+# one place so translating or rewording is a one-line change.
+_ERROR_MESSAGES = {
+    "parse_failed":           "❓ Ich konnte deine Anfrage nicht verarbeiten.",
+    "fallback_no_match":      "❓ Kein passendes Gerät gefunden (REST-Fallback ohne Treffer).",
+    "needs_fallback_no_mode": (
+        "❓ Diese Aktion benötigt Parameter (z.B. Temperatur, Position) "
+        "die hier nicht ausführbar sind. Aktiviere FALLBACK_MODE=2 für MCP-Unterstützung."
+    ),
+    "no_match":               "❓ Kein passendes Gerät gefunden.",
+    "mcp_failed":             "❓ MCP-Fallback fehlgeschlagen.",
+}
 
 
-_RAG_ENRICH_MAX_WORDS = 5  # enrich embed query with history context for short transcripts
+def _format_reply(result: dict) -> str:
+    """Turn a core.processor result dict into a Markdown Telegram message."""
+    error = result.get("error")
+    reply = result.get("reply", "")
+    executed = result.get("actions_executed", [])
+    ignored = result.get("actions_ignored", [])
+
+    # Special case: "no_match" with a reply from the LLM — show the reply
+    # (preserves the original "💬 {reply}" behaviour for chatty LLM responses).
+    if error == "no_match" and reply:
+        return f"💬 {reply}"
+
+    if error and error in _ERROR_MESSAGES:
+        return _ERROR_MESSAGES[error]
+
+    parts: list[str] = []
+    if reply:
+        parts.append(reply)
+
+    if executed:
+        parts.append("")  # blank line between reply and action list
+        for a in executed:
+            icon = "✅" if a["success"] else "❌"
+            parts.append(f"{icon} `{a['action']}` -> `{a['entity_id']}`")
+
+    if ignored:
+        parts.append("")
+        parts.append(f"⚠️ *Durch Limit ({MAX_ACTIONS_PER_COMMAND}) ignoriert:*")
+        for a in ignored:
+            parts.append(f"❌ `{a['action']}` -> `{a['entity_id']}`")
+
+    text = "\n".join(parts).strip()
+    return text or "❓ Kein passendes Gerät gefunden."
 
 
-def _resolve_command(transcript: str, chat_id: int) -> dict | None:
-    """Return a command dict using RAG (if enabled) or the legacy entities.yaml path.
-
-    RAG errors are caught here and logged; the function then falls back to the
-    legacy path so the rest of _process_command is unaffected.
-
-    When RAG is active and the transcript is short (likely a follow-up like
-    "und wieder aus"), the embed query is enriched with the last user message
-    from history so the KNN search finds the correct entity rather than
-    matching on stray words (e.g. "aus" in entity IDs).
-    The LLM still receives the original transcript + full history — only the
-    embedding step uses the enriched query.
-    """
-    if RAG_ENABLED:
-        try:
-            from bot.rag.index import query as rag_query
-
-            embed_query = transcript
-            if len(transcript.split()) <= _RAG_ENRICH_MAX_WORDS:
-                context: list[str] = [m for m in get_recent_user_messages(chat_id) if m != transcript]
-                if HISTORY_INCLUDE_ASSISTANT:
-                    context.extend(get_recent_assistant_replies(chat_id))
-                if context:
-                    embed_query = " | ".join(context) + " → " + transcript
-                    logger.info(f"[Dispatch] RAG embed query angereichert: '{embed_query}'")
-
-            rag_entities = rag_query(embed_query)
-            if rag_entities:
-                logger.info(f"[Dispatch] RAG-Pfad | {len(rag_entities)} Kandidaten")
-                return parse_command_rag(transcript, rag_entities, chat_id=chat_id)
-            logger.warning("[Dispatch] RAG lieferte keine Kandidaten — Legacy-Pfad")
-        except Exception as e:
-            logger.error(f"[Dispatch] RAG fehlgeschlagen: {e} — Legacy-Pfad")
-
-    return parse_command(transcript, chat_id=chat_id)
-
-
-async def _process_command(update, context, transcript: str):
-    chat_id = update.effective_chat.id
-    logger.info(
-        f"[Dispatch] chat={chat_id} | FALLBACK_MODE={_FALLBACK_LABELS.get(FALLBACK_MODE, FALLBACK_MODE)} "
-        f"| Transcript: '{transcript}'"
-    )
-
-    # Snapshot history BEFORE the primary LLM path runs and appends the current
-    # transcript. The snapshot is passed to the REST fallback so it gets prior
-    # context without duplicating the current transcript.
-    history_snapshot = get_history_snapshot(chat_id)
-
-    command = _resolve_command(transcript, chat_id)
-
-    if not command:
-        logger.warning(f"[Dispatch] chat={chat_id} | parse_command lieferte nichts zurueck")
-        await update.message.reply_text("❓ Ich konnte deine Anfrage nicht verarbeiten.")
-        return
-
-    reply = command.get("reply", "")
-    actions = command.get("actions", [])
-    fallback_states: list[dict] = []
-
-    # needs_fallback: Entity in entities.yaml gefunden, aber Aktion braucht Parameter
-    # (z.B. Temperatur setzen, Rollo-Position abfragen auf Switch-Entity) -> Fallback.
-    if any(a.get("action") == "needs_fallback" for a in actions):
-        triggering = next(a for a in actions if a.get("action") == "needs_fallback")
-        logger.info(
-            f"[Dispatch] chat={chat_id} | needs_fallback fuer "
-            f"'{triggering.get('entity_id', '?')}' — wechsel zu Mode {FALLBACK_MODE}"
-        )
-        if FALLBACK_MODE == 1:
-            await update.message.reply_text("🔍 Nicht in Entity-Config lösbar, suche Entities manuell...")
-            fallback_states = get_all_states(
-                FALLBACK_REST_DOMAINS or None,
-                FALLBACK_REST_MAX_ENTITIES,
-            )
-            logger.info(
-                f"[Fallback Mode 1 / REST] chat={chat_id} | needs_fallback-Pfad | "
-                f"{len(fallback_states)} Live-Entities von HA geladen"
-            )
-            fb = parse_command_with_states(transcript, fallback_states, chat_id=chat_id, prior_history=history_snapshot)
-            # Nur weitermachen wenn die Live-Liste echte ausführbare Actions liefert
-            if fb and fb.get("actions") and not any(
-                a.get("action") == "needs_fallback" for a in fb["actions"]
-            ):
-                logger.info(
-                    f"[Fallback Mode 1 / REST] chat={chat_id} | Treffer: "
-                    f"{[a.get('entity_id') for a in fb['actions']]}"
-                )
-                command = fb
-                reply = command.get("reply", "")
-                actions = command.get("actions", [])
-                # fallback_states already set above — used by states_by_id further down
-            else:
-                logger.warning(f"[Fallback Mode 1 / REST] chat={chat_id} | kein verwertbarer Treffer")
-                await update.message.reply_text(
-                    "❓ Kein passendes Gerät gefunden (REST-Fallback ohne Treffer)."
-                )
-                return
-        elif FALLBACK_MODE == 2:
-            await update.message.reply_text("🔍 Nicht in Entity-Config lösbar, nutze MCP-Modus...")
-            mcp_reply = fallback_via_mcp(transcript, chat_id=chat_id)
-            if mcp_reply:
-                logger.info(f"[Dispatch] chat={chat_id} | Mode 2 lieferte Antwort")
-                await update.message.reply_text(mcp_reply)
-            else:
-                logger.warning(f"[Dispatch] chat={chat_id} | Mode 2 fehlgeschlagen")
-                await update.message.reply_text("❓ MCP-Fallback fehlgeschlagen.")
-            return
-        else:
-            await update.message.reply_text(
-                "❓ Diese Aktion benötigt Parameter (z.B. Temperatur, Position) "
-                "die hier nicht ausführbar sind. Aktiviere FALLBACK_MODE=2 für MCP-Unterstützung."
-            )
-            return
-
-    if not actions:
-        logger.info(
-            f"[Dispatch] chat={chat_id} | Primaerpfad ohne Treffer in entities.yaml "
-            f"-> Fallback Mode {FALLBACK_MODE}"
-        )
-        # Kein Treffer in entities.yaml -> je nach FALLBACK_MODE weitermachen
-        if FALLBACK_MODE == 1:
-            await update.message.reply_text("🔍 Nicht in Entity-Config gefunden, suche Entities manuell...")
-            # REST-Fallback: alle HA-Entities holen und LLM mit Live-Liste fragen
-            fallback_states = get_all_states(
-                FALLBACK_REST_DOMAINS or None,
-                FALLBACK_REST_MAX_ENTITIES,
-            )
-            logger.info(
-                f"[Fallback Mode 1 / REST] chat={chat_id} | "
-                f"{len(fallback_states)} Live-Entities von HA geladen"
-            )
-            fb = parse_command_with_states(
-                transcript, fallback_states, chat_id=chat_id, prior_history=history_snapshot
-            )
-            if fb and fb.get("actions"):
-                logger.info(
-                    f"[Fallback Mode 1 / REST] chat={chat_id} | Treffer: "
-                    f"{[a.get('entity_id') for a in fb['actions']]}"
-                )
-                command = fb
-                reply = command.get("reply", "")
-                actions = command.get("actions", [])
-            else:
-                logger.warning(f"[Fallback Mode 1 / REST] chat={chat_id} | kein Treffer")
-                await update.message.reply_text(
-                    "❓ Kein passendes Gerät gefunden (REST-Fallback ohne Treffer)."
-                )
-                return
-        elif FALLBACK_MODE == 2:
-            await update.message.reply_text("🔍 Nicht in Entity-Config gefunden, nutze MCP-Modus...")
-            # MCP-Fallback: LM Studio macht alles (Tool-Auswahl, Ausfuehrung, Antwort)
-            mcp_reply = fallback_via_mcp(transcript, chat_id=chat_id)
-            if mcp_reply:
-                logger.info(f"[Dispatch] chat={chat_id} | Mode 2 lieferte Antwort")
-                await update.message.reply_text(mcp_reply)
-            else:
-                logger.warning(f"[Dispatch] chat={chat_id} | Mode 2 fehlgeschlagen")
-                await update.message.reply_text("❓ MCP-Fallback fehlgeschlagen.")
-            return
-        else:
-            await update.message.reply_text(
-                f"💬 {reply}" if reply else "❓ Kein passendes Gerät gefunden."
-            )
-            return
-
-    logger.info(
-        f"[Dispatch] chat={chat_id} | Primaerpfad: {len(actions)} Action(s) -> "
-        f"{[a.get('entity_id') for a in actions]}"
-    )
-
-    entities_by_id = {e["id"]: e for e in _load_entities()}
-    # Fuer REST-Fallback: Live-States als Beschreibungsquelle (friendly_name)
-    states_by_id = {s["entity_id"]: s for s in fallback_states}
-
-    executed_results = []
-    ignored_results = []
-    state_queries = []  # {entity_id, description, ha_response}
-
-    for act in actions:
-        entity_id = act.get("entity_id")
-        action = act.get("action")
-        domain = act.get("domain")
-
-        # Wurde die Action vom Limit in llm.py abgeschnitten?
-        if act.get("ignored"):
-            ignored_results.append(f"❌ `{action}` -> `{entity_id}`")
-            continue
-
-        # Sicherheitshalber nochmal das harte Limit prüfen
-        # (executed_results enthaelt bereits sowohl Steuer- als auch get_state-Actions)
-        if MAX_ACTIONS_PER_COMMAND > 0 and len(executed_results) >= MAX_ACTIONS_PER_COMMAND:
-            ignored_results.append(f"❌ `{action}` -> `{entity_id}`")
-            continue
-
-        if action == "get_state":
-            ha_response = get_state(entity_id)
-            # Beschreibung bevorzugt aus entities.yaml; fuer REST-Fallback-Entities
-            # friendly_name aus den Live-States als Ersatz.
-            description = (
-                entities_by_id.get(entity_id, {}).get("description")
-                or states_by_id.get(entity_id, {}).get("friendly_name", "")
-            )
-            state_queries.append({
-                "entity_id": entity_id,
-                "description": description,
-                "ha_response": ha_response,
-            })
-            icon = "✅" if ha_response else "❌"
-            executed_results.append(f"{icon} `get_state` -> `{entity_id}`")
-        else:
-            success = call_service(domain, action, entity_id)
-            icon = "✅" if success else "❌"
-            executed_results.append(f"{icon} `{action}` -> `{entity_id}`")
-
-    # Ausfuehrungs-Zusammenfassung in History anhaengen (universell fuer beide Modi).
-    # So sieht das LLM beim naechsten Turn die konkreten entity_ids die gesteuert
-    # wurden — wichtig fuer Anapher-Folgebefehle wie "und wieder aus".
-    if HISTORY_APPEND_EXECUTIONS:
-        executed = [
-            f"{a.get('action')} -> {a.get('entity_id')}"
-            for a in actions
-            if not a.get("ignored") and a.get("action") and a.get("entity_id")
-            and a.get("action") != "needs_fallback"
-        ]
-        if executed:
-            append_execution_summary(chat_id, "ausgefuehrt: " + ", ".join(executed))
-
-    # Falls Zustandsabfragen dabei waren: zweiter LLM-Aufruf fuer natuerliche Antwort
-    final_reply = reply
-    if state_queries:
-        final_reply = format_state_reply(transcript, state_queries, chat_id=update.effective_chat.id)
-
-    # Nachricht zusammenbauen
-    answer = f"{final_reply}\n\n" if final_reply else ""
-
-    if executed_results:
-        answer += "\n".join(executed_results)
-
-    if ignored_results:
-        answer += f"\n\n⚠️ *Durch Limit ({MAX_ACTIONS_PER_COMMAND}) ignoriert:*\n"
-        answer += "\n".join(ignored_results)
-
+async def _dispatch(update, context, transcript: str):
+    """Common path: run the processor, format the result, reply to Telegram."""
+    result = process_transcript(transcript, chat_id=update.effective_chat.id)
+    answer = _format_reply(result)
     try:
         await update.message.reply_text(answer, parse_mode="Markdown")
-    except Exception as e:
-        # Falls die Antwort kaputte Markdown enthaelt (z.B. von einem Modell erzeugt),
-        # ohne Parse-Modus erneut senden damit die Nachricht nicht ganz verloren geht.
+    except Exception:
+        # Fall back to plain-text if the LLM-generated reply contains bad Markdown
         await update.message.reply_text(answer)
 
 
@@ -280,8 +86,7 @@ async def handle_voice(update, context):
 
     voice_dir = ensure_voice_dir()
     telegram_file = await context.bot.get_file(update.message.voice.file_id)
-    file_name = f"{update.message.voice.file_unique_id}.ogg"
-    file_path = voice_dir / file_name
+    file_path = voice_dir / f"{update.message.voice.file_unique_id}.ogg"
     await telegram_file.download_to_drive(custom_path=str(file_path))
 
     await update.message.reply_text("🎙️ Transkribiere...")
@@ -295,16 +100,15 @@ async def handle_voice(update, context):
         await update.message.reply_text(f"📝 Erkannt: {transcript}")
 
     await update.message.reply_text("🤖 Analysiere Befehl...")
-    await _process_command(update, context, transcript)
+    await _dispatch(update, context, transcript)
 
 
 async def handle_text(update, context):
     if not update.message or not update.message.text:
         return
 
-    text = update.message.text.strip()
     await update.message.reply_text("🤖 Analysiere...")
-    await _process_command(update, context, text)
+    await _dispatch(update, context, update.message.text.strip())
 
 
 async def handle_rag_rebuild(update, context):
@@ -313,9 +117,9 @@ async def handle_rag_rebuild(update, context):
         return
 
     await update.message.reply_text("🔄 Starte RAG-Index Rebuild ...")
-
     try:
-        from bot.rag.index import build as rag_build, status as rag_status
+        from core.rag.index import build as rag_build, status as rag_status
+
         loop = asyncio.get_event_loop()
         count = await loop.run_in_executor(None, rag_build)
         info = rag_status()
