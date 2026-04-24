@@ -1,0 +1,13 @@
+services:
+  tts:
+    build: .
+    ports:
+      - "10400:10400"
+    volumes:
+      - ./models:/models
+    environment:
+      - DEFAULT_VOICE=de_DE-thorsten-low
+      - MODELS_DIR=/models
+      - TTS_PORT=10400
+      - RESAMPLE_RATE=16000
+    restart: unless-stopped

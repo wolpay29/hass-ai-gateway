@@ -140,17 +140,26 @@ The script (`voice_client.py`) listens for a wake word, records your command, se
 ### Architecture
 
 ```
-[ReSpeaker HAT] --> voice_client.py --> POST /audio --> [Voice Gateway on PC :8765]
-                                                               |
-                                                       [Whisper transcription]
-                                                               |
-                                                        [LLM + Home Assistant]
-                                                               |
-                                                       JSON reply --> [pyttsx3 TTS on Pi]
+[ReSpeaker HAT] --> voice_client.py --> POST /audio?tts=true --> [Voice Gateway :8765]
+                                                                          |
+                                                                  [Whisper transcription]
+                                                                          |
+                                                                   [LLM + Home Assistant]
+                                                                          |
+                                                               POST text --> [TTS Server :10400]
+                                                                          |
+                                                               WAV file <--
+                                                                          |
+                         aplay plays WAV directly <-- audio/wav response
 ```
 
-The Voice Gateway must be running on your PC before starting the client on the Pi.
-Start it with: `python assistant/services/voice_gateway/main.py`
+> **Why external TTS?** Local Piper TTS on the Pi 3b+ was too slow. TTS now runs on
+> the same external host as Whisper where synthesis is near-instant. The Pi only
+> needs to play the received WAV with `aplay` — no model needed locally.
+
+Two services must be running before starting the Pi client:
+- Voice Gateway: `python assistant/services/voice_gateway/main.py`
+- TTS Server: see **TTS Server Setup** section below
 
 ### 1. System Packages
 
@@ -259,7 +268,7 @@ EOF
 - `WAKE_WORD`: Built-in choices: `hey_jarvis`, `alexa`, `hey_mycroft`, `hey_rhasspy`.
 - `ALSA_INPUT_DEVICE`: ALSA device for mic input. Same format as `arecord -D`. Usually `plughw:1,0`.
 - `ALSA_OUTPUT_DEVICE`: ALSA device for all audio output (beep + TTS). Same format as `aplay -D`. Usually `plughw:1,0`.
-- `TTS_MODEL`: Path to your downloaded Piper `.onnx` model file. Leave empty to fall back to espeak.
+- `TTS_MODEL`: Only used as local fallback if the TTS server is unreachable. Leave empty since TTS now runs externally.
 
 The script loads `.env` automatically — just run it directly:
 
@@ -351,6 +360,69 @@ journalctl -u voice-client -f
 | `curl /health` times out | Voice Gateway not running on PC | Start `python assistant/services/voice_gateway/main.py` on your PC |
 | `{"error":"no_speech"}` from gateway | Mic not capturing audio | Re-run amixer commands from Section 4 above |
 | `sounddevice.PortAudioError: Invalid device` | Wrong `ALSA_INPUT_DEVICE` card number | Run `arecord -l` to confirm the card number and update `ALSA_INPUT_DEVICE` in `.env` |
-| TTS speaks but no sound from HAT speaker | Speaker output not routed | Re-run amixer output commands and `sudo alsactl store` |
+| No audio reply from Pi | TTS server not running or wrong URL | Check `TTS_EXTERNAL_URL` in gateway `.env` and verify TTS server is up |
 | Wake word never fires | Threshold too high or wrong wake word | Lower `WAKE_THRESHOLD` to `0.3`, or check `WAKE_WORD` spelling |
-| `pyttsx3` init error | espeak not installed | `sudo apt install espeak espeak-data libespeak-dev` |
+| Records too long / cuts off early | VAD threshold wrong for room noise | Adjust `VAD_SILENCE_THRESHOLD` (default 500, raise in noisy rooms) |
+
+---
+
+## TTS Server Setup (External Host)
+
+The TTS server runs on the same machine as your Whisper instance. It wraps the Piper binary behind a simple HTTP API so the Voice Gateway can synthesize replies without any TTS processing on the Pi.
+
+Files are in `assistant/services/tts_server/`.
+
+### 1. Copy files to the external host
+
+```bash
+scp -r assistant/services/tts_server/ user@<WHISPER_HOST>:~/tts_server/
+```
+
+### 2. Download a voice model
+
+On the external host:
+
+```bash
+mkdir -p ~/tts_server/models
+cd ~/tts_server/models
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/low/de_DE-thorsten-low.onnx
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/low/de_DE-thorsten-low.onnx.json
+```
+
+### 3. Run with Docker
+
+```bash
+cd ~/tts_server
+docker compose up -d
+```
+
+Verify it works:
+```bash
+curl http://localhost:10400/health
+# Expected: {"status":"ok","models_dir":"/models","default_voice":"de_DE-thorsten-low"}
+
+curl -X POST http://localhost:10400/tts \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hallo, ich bin dein Sprachassistent."}' \
+  --output /tmp/test.wav
+aplay /tmp/test.wav
+```
+
+### 4. Configure the Voice Gateway
+
+Add to `assistant/.env` on your PC:
+
+```
+TTS_EXTERNAL_URL=http://<WHISPER_HOST_IP>:10400/tts
+TTS_EXTERNAL_VOICE=de_DE-thorsten-low
+```
+
+Restart the Voice Gateway. The `/health` endpoint will now return `"tts": true` when TTS is configured.
+
+### 5. Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `MODELS_DIR` | `/models` | Directory containing `.onnx` + `.onnx.json` model files |
+| `DEFAULT_VOICE` | `de_DE-thorsten-low` | Voice used when request doesn't specify one |
+| `TTS_PORT` | `10400` | Port the server listens on |

@@ -32,6 +32,13 @@ HA_TOKEN = os.getenv("HA_TOKEN")
 CHECK_INTERVAL_SECONDS = int(os.getenv("CHECK_INTERVAL_SECONDS", "300"))
 BATTERY_THRESHOLD = float(os.getenv("BATTERY_THRESHOLD", "80"))
 
+# External TTS server (tts_server service).
+# When set, the voice gateway calls this to synthesize replies and returns WAV
+# directly to the Pi instead of JSON — no TTS processing on the Pi needed.
+# Leave empty to keep returning JSON (Pi does TTS locally).
+TTS_EXTERNAL_URL = os.getenv("TTS_EXTERNAL_URL", "")
+TTS_EXTERNAL_VOICE = os.getenv("TTS_EXTERNAL_VOICE", "de_DE-thorsten-low")
+
 # Whisper Backend: "local" oder "external"
 WHISPER_BACKEND = os.getenv("WHISPER_BACKEND", "local").lower()
 

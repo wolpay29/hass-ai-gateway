@@ -4,9 +4,10 @@ Raspberry Pi voice client — keyword detection + audio capture + gateway call +
 Flow:
   1. Listen continuously with openwakeword for the wake word
   2. On detection: play an acknowledgement beep, start recording
-  3. Record until VAD silence (1.5 s of quiet after speech begins)
-  4. POST the WAV to the voice gateway /audio endpoint
-  5. Speak back the reply via Piper TTS (or pyttsx3 if no model configured)
+  3. Record until VAD silence (1.0 s of quiet after speech begins)
+  4. POST the WAV to the voice gateway /audio endpoint with tts=true
+  5. If gateway returns audio/wav (external TTS active): play it directly via aplay
+     If gateway returns JSON (no external TTS): synthesize locally via Piper/pyttsx3
   6. Repeat
 
 Requirements: see requirements.txt
@@ -75,10 +76,12 @@ SAMPLE_RATE: int = 16000   # Hz — openwakeword and Whisper both expect 16 kHz
 CHUNK_MS: int    = 80      # ms per processing chunk (openwakeword default)
 CHUNK_FRAMES: int = int(SAMPLE_RATE * CHUNK_MS / 1000)
 
-# VAD settings for recording after wake word
-VAD_SILENCE_THRESHOLD: float = 0.015   # RMS amplitude below this = silence
-VAD_SILENCE_DURATION: float  = 1.5     # seconds of silence to end recording
-VAD_MAX_DURATION: float      = 10.0    # hard cutoff seconds
+# VAD settings for recording after wake word.
+# Threshold is in int16 RMS units (0-32767). 500 = roughly -36 dBFS.
+# Raise if it cuts off too early in a noisy room, lower if it records too long.
+VAD_SILENCE_THRESHOLD: float = float(os.getenv("VAD_SILENCE_THRESHOLD", "500"))
+VAD_SILENCE_DURATION: float  = float(os.getenv("VAD_SILENCE_DURATION", "1.0"))
+VAD_MAX_DURATION: float      = float(os.getenv("VAD_MAX_DURATION", "10.0"))
 VAD_MIN_DURATION: float      = 0.4     # ignore clips shorter than this
 
 # Detection threshold (0–1). Lower = more sensitive but more false positives.
@@ -97,6 +100,12 @@ TTS_RATE: int = int(os.getenv("TTS_RATE", "165"))
 BEEP_FREQ: int = 880
 BEEP_MS: int   = 120
 
+# Speaker volume set at startup via amixer. Format: "80%" or leave empty to skip.
+SPEAKER_VOLUME: str = os.getenv("SPEAKER_VOLUME", "100%")
+# ALSA card number derived from ALSA_OUTPUT_DEVICE (e.g. plughw:1,0 → card 1)
+_card_match = re.search(r":(\d+),", ALSA_OUTPUT_DEVICE)
+_ALSA_CARD: str = _card_match.group(1) if _card_match else "1"
+
 
 # ---------------------------------------------------------------------------
 # Audio output — all playback goes through aplay (proven to work with HAT)
@@ -111,16 +120,20 @@ def _aplay(wav_bytes: bytes) -> None:
     )
 
 
+# Pre-generate beep at startup so playback is instant on detection.
+_BEEP_TONE = (0.4 * np.sin(
+    2 * np.pi * BEEP_FREQ * np.linspace(0, BEEP_MS / 1000, int(SAMPLE_RATE * BEEP_MS / 1000), False)
+)).astype(np.float32)
+
+
 def _beep() -> None:
-    t = np.linspace(0, BEEP_MS / 1000, int(SAMPLE_RATE * BEEP_MS / 1000), False)
-    tone = (0.4 * np.sin(2 * np.pi * BEEP_FREQ * t) * 32767).astype(np.int16)
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(SAMPLE_RATE)
-        wf.writeframes(tone.tobytes())
-    _aplay(buf.getvalue())
+    # Use sounddevice directly — no subprocess overhead, instant playback.
+    # 16000 Hz works on the ReSpeaker HAT (unlike Piper's 22050 Hz).
+    try:
+        sd.play(_BEEP_TONE, samplerate=SAMPLE_RATE, device=AUDIO_INPUT_DEVICE)
+        sd.wait()
+    except Exception:
+        pass  # silent fail — beep is non-critical
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +145,19 @@ _PIPER_BIN = str(Path(sys.executable).parent / "piper")
 
 _piper_sample_rate: int | None = None
 _pyttsx3_engine = None
+
+
+def _set_volume() -> None:
+    if not SPEAKER_VOLUME:
+        return
+    controls = ["Playback", "Speaker", "Headphone"]
+    for ctrl in controls:
+        result = subprocess.run(
+            ["amixer", "-c", _ALSA_CARD, "sset", ctrl, SPEAKER_VOLUME],
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            logger.info(f"[Volume] {ctrl} → {SPEAKER_VOLUME}")
 
 
 def _init_tts() -> None:
@@ -249,8 +275,12 @@ def _pcm_to_wav(pcm: bytes) -> bytes:
 # Gateway call
 # ---------------------------------------------------------------------------
 
-def _send_audio(wav_bytes: bytes) -> str:
-    """POST WAV to the gateway /audio endpoint. Returns the reply text."""
+def _send_audio(wav_bytes: bytes) -> tuple[bytes | None, str]:
+    """
+    POST WAV to the gateway with tts=true.
+    Returns (wav_bytes, text) — wav_bytes is set when gateway returns audio/wav
+    (external TTS active), text is set when gateway returns JSON (local TTS fallback).
+    """
     headers = {}
     if GATEWAY_API_KEY:
         headers["X-Api-Key"] = GATEWAY_API_KEY
@@ -259,27 +289,30 @@ def _send_audio(wav_bytes: bytes) -> str:
         resp = requests.post(
             f"{GATEWAY_URL}/audio",
             files={"file": ("command.wav", wav_bytes, "audio/wav")},
-            data={"device_id": DEVICE_ID},
+            data={"device_id": DEVICE_ID, "tts": "true"},
             headers=headers,
             timeout=30,
         )
         resp.raise_for_status()
+
+        if resp.headers.get("content-type", "").startswith("audio/"):
+            logger.info(f"[Gateway] Received WAV reply ({len(resp.content)} bytes)")
+            return resp.content, ""
+
         data = resp.json()
-        logger.info(f"[Gateway] Response: {data}")
-
+        logger.info(f"[Gateway] Received JSON reply: {data}")
         if data.get("error") == "no_speech":
-            return "Ich habe dich leider nicht verstanden."
+            return None, "Ich habe dich leider nicht verstanden."
         if data.get("error"):
-            return f"Fehler: {data['error']}"
-
-        return data.get("reply") or ""
+            return None, f"Fehler: {data['error']}"
+        return None, data.get("reply") or ""
 
     except requests.exceptions.ConnectionError:
         logger.error(f"[Gateway] Cannot connect to {GATEWAY_URL}")
-        return "Gateway nicht erreichbar."
+        return None, "Gateway nicht erreichbar."
     except Exception as e:
         logger.error(f"[Gateway] Request failed: {e}")
-        return "Fehler beim Senden."
+        return None, "Fehler beim Senden."
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +320,7 @@ def _send_audio(wav_bytes: bytes) -> str:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    _set_volume()
     _init_tts()
 
     logger.info(f"[Init] Loading wake word model: '{WAKE_WORD}'")
@@ -305,9 +339,6 @@ def main() -> None:
             prediction = oww.predict(chunk)
 
             score = max(prediction.values()) if prediction else 0.0
-            rms = _rms(chunk)
-            if rms > 0.001:
-                logger.info(f"[WakeWord] RMS={rms:.4f} Score={score:.3f} (threshold={WAKE_THRESHOLD})")
 
             if score >= WAKE_THRESHOLD:
                 logger.info(f"[WakeWord] Detected '{WAKE_WORD}' (score={score:.2f})")
@@ -320,9 +351,11 @@ def main() -> None:
                     _speak("Entschuldigung, ich habe nichts gehört.")
                     continue
 
-                wav = _pcm_to_wav(pcm)
-                reply = _send_audio(wav)
-                _speak(reply)
+                wav_reply, text_reply = _send_audio(_pcm_to_wav(pcm))
+                if wav_reply:
+                    _aplay(wav_reply)
+                elif text_reply:
+                    _speak(text_reply)
 
 
 if __name__ == "__main__":
