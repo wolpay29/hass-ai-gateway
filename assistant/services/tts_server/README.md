@@ -40,7 +40,7 @@ The entrypoint script checks whether the model files are present in `./models/` 
 |---|---|---|
 | `DEFAULT_VOICE` | `de_DE-thorsten-low` | Voice model filename without extension |
 | `MODELS_DIR` | `/models` | Path to model files inside the container |
-| `TTS_PORT` | `10400` | Listening port |
+| `TTS_PORT` | `10400` | Listening port — controls both the internal container port and the host mapping (`10400:10400`). Change both together if you need a different port. |
 | `RESAMPLE_RATE` | `16000` | Resample output to this Hz. Set to `0` for native model rate. Required for ReSpeaker HAT (WM8960 only supports multiples of 8000 Hz — 22050 Hz models play silently without this). |
 
 ## API

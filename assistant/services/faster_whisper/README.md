@@ -50,7 +50,7 @@ The model (`faster-whisper-large-v3-turbo-ct2`) is pulled from HuggingFace on fi
 | `WHISPER__LANGUAGE` | `de` | ISO language code, or omit for auto-detect |
 | `WHISPER__USE_VAD` | `true` | Voice Activity Detection — filters silence before transcription |
 
-Port mapping: host `10300` → container `8000`.
+Port mapping: host `10300` → container `8000`. The internal port `8000` is baked into the `fedirz/faster-whisper-server` image and cannot be changed — only the host-side port (`10300`) can be adjusted.
 
 ## API
 

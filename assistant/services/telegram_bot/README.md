@@ -58,54 +58,27 @@ Telegram bot for Home Assistant control with menu-based actions, battery monitor
 
 Create a `.env` file in the same folder as `telegram_ha_bot.py`:
 
+Copy `assistant/.env.example` to `assistant/.env` and fill in your values. The full reference is in the `.env.example` file and the [Full config reference](#full-config-reference) section below. Minimum required entries:
+
 ```ini
-BOT_TOKEN=your_telegram_bot_token
-MY_CHAT_ID=-123456789
+BOT_TOKEN=your-telegram-bot-token
+MY_CHAT_ID=123456789
 
-HA_URL=http://10.1.10.100:8123
-HA_TOKEN=your_long-lived_token
+HA_URL=http://192.168.1.x:8123
+HA_TOKEN=your-long-lived-ha-token
 
-CHECK_INTERVAL_SECONDS=300
-BATTERY_THRESHOLD=80
+# Whisper: "external" = use the faster-whisper Docker (recommended)
+WHISPER_BACKEND=external
+WHISPER_EXTERNAL_URL=http://192.168.1.x:10300/v1/audio/transcriptions
+WHISPER_EXTERNAL_MODEL=deepdml/faster-whisper-large-v3-turbo-ct2
 
-VOICE_REPLY_WITH_TRANSCRIPT=true
-VOICE_DOWNLOAD_DIR=data/voice
+# LM Studio
+LMSTUDIO_URL=http://192.168.1.x:1234
+LMSTUDIO_MODEL=qwen2.5-7b-instruct
+LMSTUDIO_API_KEY=sk-...
 
-WHISPER_MODEL=small
-WHISPER_DEVICE=cpu
-WHISPER_COMPUTE_TYPE=int8
-
-# LM Studio (OpenAI-kompatibel + /api/v1/chat fuer MCP)
-LMSTUDIO_URL=http://10.1.10.78:1234
-LMSTUDIO_MODEL=qwen/qwen3.5-9b
-LMSTUDIO_API_KEY=sk-lm-...
-LMSTUDIO_TIMEOUT=30
-LMSTUDIO_TEMPERATURE=0.1
-
-# Fallback: 0=off, 1=REST (live HA entities), 2=MCP (LM Studio with HA MCP server)
+# Fallback: 0=off, 1=REST, 2=MCP
 FALLBACK_MODE=2
-FALLBACK_REST_DOMAINS=
-FALLBACK_REST_MAX_ENTITIES=0
-
-# Mode 2 (MCP) settings
-LMSTUDIO_CONTEXT_LENGTH=8000
-LMSTUDIO_MCP_ALLOWED_TOOLS=HassTurnOn,HassTurnOff,HassCancelAllTimers,HassBroadcast,HassClimateSetTemperature,HassLightSet,GetDateTime,GetLiveContext
-
-# Conversation history (both modes)
-LLM_HISTORY_SIZE=4
-HISTORY_INCLUDE_ASSISTANT=true
-HISTORY_APPEND_EXECUTIONS=true
-
-# RAG mode
-RAG_ENABLED=false
-RAG_DB_PATH=data/rag/entities.sqlite
-RAG_TOP_K=15
-RAG_KEYWORD_BOOST=0.3
-RAG_EMBED_URL=http://10.1.10.79:1234
-RAG_EMBED_API_KEY=sk-lm-...
-RAG_EMBED_TIMEOUT=30
-RAG_EMBED_MODEL=text-embedding-nomic-embed-text-v2-moe
-RAG_EMBED_DIM=768
 ```
 
 ### Fallback modes
