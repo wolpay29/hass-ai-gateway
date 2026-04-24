@@ -32,6 +32,25 @@ def _load_entities() -> list:
     return (data or {}).get("entities") or []
 
 
+_prompts_cache: dict | None = None
+
+
+def _load_prompts() -> dict:
+    global _prompts_cache
+    if _prompts_cache is None:
+        path = Path(__file__).parent / "prompts.yaml"
+        _prompts_cache = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return _prompts_cache
+
+
+def _build_prompt(key: str, **kwargs) -> str:
+    prompts = _load_prompts()
+    text = prompts[key].format(**kwargs)
+    if LMSTUDIO_NO_THINK:
+        text += "\n\n" + prompts["no_think_suffix"]
+    return text
+
+
 def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
     entities = _load_entities()
     valid_ids = {e["id"] for e in entities}
@@ -41,35 +60,7 @@ def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
         for e in entities
     )
 
-    system_prompt = f"""Smart Home Assistent. Antworte NUR mit JSON, kein anderer Text.
-
-Geraete:
-{entity_list}
-
-Format IMMER so (auch bei nur einem Gerät):
-{{"reply":"...", "actions":[{{"entity_id":"...","action":"...","domain":"..."}}]}}
-
-Mehrere Geräte gleichzeitig möglich:
-{{"reply":"...", "actions":[{{"entity_id":"light.licht_paul","action":"turn_on","domain":"light"}},{{"entity_id":"light.licht_max","action":"turn_on","domain":"light"}}]}}
-
-Kein Treffer:
-{{"reply":"...", "actions":[]}}
-
-Aktionen:
-- "turn_on" / "turn_off" / "toggle": Gerät steuern (Licht, Schalter)
-- "trigger": Automation ausloesen (Tor, Pool Pumpe)
-- "get_state": Aktuellen Zustand eines Sensors/Geraets abfragen (z.B. "wie warm ist der Pool?", "ist das Licht bei Paul an?", "wie viel erzeugt die PV?")
-- "needs_fallback": Wenn der Nutzer eine Aktion mit Parametern verlangt die hier nicht ausfuehrbar ist (z.B. Temperatur setzen, Helligkeit, Position, Modus). Auch wenn der Nutzer nach einem Wert fragt, den der Entity-Typ nicht liefern kann — z.B. Position/Stellung einer Rollo die als Switch (on/off) definiert ist. Entity-ID trotzdem angeben.
-
-Wenn der Nutzer nach einem Wert, Zustand oder Status fragt, nutze "get_state".
-Wenn der Nutzer nach Position/Stellung/Prozent einer Rollo/eines Covers fragt und die Entity ein Switch ist (kein cover-Domain), nutze "needs_fallback".
-Bei "get_state" ist "reply" egal — er wird spaeter mit Live-Daten ersetzt. Einfach "..." oder kurzen Platzhalter setzen.
-
-WICHTIG: entity_id MUSS exakt aus der obigen Geräteliste stammen. Niemals eine entity_id erfinden!
-"reply" ist immer eine kurze freundliche Antwort auf Deutsch."""
-
-    if LMSTUDIO_NO_THINK:
-        system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags und führe keine Gedankengänge aus!"
+    system_prompt = _build_prompt("primary_parser", entity_list=entity_list)
 
     logger.info(
         f"[LLM] Transcript: '{transcript}' | Modell: {LMSTUDIO_MODEL} | "
@@ -252,38 +243,7 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
 
     entity_list = "\n".join(_fmt(e) for e in entities)
 
-    system_prompt = f"""Smart Home Assistent. Antworte NUR mit JSON, kein anderer Text.
-Du erhaeltst eine vorgefilterte Liste relevanter Home Assistant Entities.
-Jede Entity hat ihre erlaubten Aktionen bereits im Feld "actions" aufgelistet —
-waehle NUR aus diesen Aktionen.
-
-Geraete:
-{entity_list}
-
-Format IMMER so:
-{{"reply":"...", "actions":[{{"entity_id":"...","action":"...","domain":"..."}}]}}
-
-Kein Treffer:
-{{"reply":"...", "actions":[]}}
-
-Spezialfall "needs_fallback":
-Wenn der Nutzer eine Aktion mit Parametern verlangt, die nicht direkt ausfuehrbar
-ist (Temperatur setzen, Helligkeit, Rollo-Position, Modus, Prozent-Abfragen auf
-Switch-Entities, ...), gib action: "needs_fallback" zurueck. Das gilt auch wenn
-die Parameter-Aktion nicht in der actions-Liste der Entity steht — needs_fallback
-ist immer erlaubt.
-
-WICHTIG:
-- entity_id MUSS exakt aus der obigen Liste stammen. Niemals erfinden.
-- "action" MUSS entweder in der actions-Liste der gewaehlten Entity stehen
-  ODER "needs_fallback" sein.
-- Beachte das optionale "note"-Feld einer Entity als zusaetzlichen Hinweis.
-- "domain" ist der Teil vor dem Punkt der entity_id.
-- "reply" ist eine kurze freundliche Antwort auf Deutsch.
-"""
-
-    if LMSTUDIO_NO_THINK:
-        system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
+    system_prompt = _build_prompt("rag_parser", entity_list=entity_list)
 
     # History aufbauen (gleiche Logik wie parse_command)
     history = []
@@ -389,30 +349,7 @@ def parse_command_with_states(transcript: str, states: list[dict], chat_id: int 
         for s in states
     )
 
-    system_prompt = f"""Smart Home Assistent. Antworte NUR mit JSON, kein anderer Text.
-Du erhaeltst eine Live-Liste aller Home Assistant Entities (kein vordefinierter Katalog).
-
-Geraete (live aus Home Assistant):
-{entity_list}
-
-Format IMMER so:
-{{"reply":"...", "actions":[{{"entity_id":"...","action":"...","domain":"..."}}]}}
-
-Kein Treffer:
-{{"reply":"...", "actions":[]}}
-
-Aktionen:
-- "turn_on" / "turn_off" / "toggle" fuer light/switch/cover
-- "trigger" fuer automation
-- "get_state" fuer Zustandsabfragen (sensor, binary_sensor, climate, ...)
-- "needs_fallback": Wenn der Nutzer eine Aktion mit Parametern verlangt die hier nicht ausfuehrbar ist (z.B. Temperatur setzen, Helligkeit, Position, Modus). Auch wenn der Nutzer nach Position/Stellung/Prozent fragt und die Entity ein Switch ist (kein cover-Domain). Entity-ID trotzdem angeben.
-
-WICHTIG: entity_id MUSS exakt aus der obigen Live-Liste stammen. Niemals erfinden!
-"domain" ist der Teil vor dem Punkt in der entity_id.
-"reply" ist eine kurze freundliche Antwort auf Deutsch."""
-
-    if LMSTUDIO_NO_THINK:
-        system_prompt += "\n\nWICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!"
+    system_prompt = _build_prompt("fallback_rest", entity_list=entity_list)
 
     history = prior_history or []
 
@@ -547,20 +484,7 @@ def format_state_reply(transcript: str, state_data: list[dict], chat_id: int = 0
     # Thinking-Modelle lassen bei offenen Aufgaben manchmal den "content" leer und
     # erledigen alles im reasoning_content. Mit erzwungenem JSON-Format produziert
     # das Modell zuverlaessig Output.
-    system_prompt = """Smart Home Assistent. Antworte NUR mit JSON, kein anderer Text.
-
-Du erhaeltst eine Frage und Live-Daten aus Home Assistant. Formuliere eine kurze, natuerliche deutsche Antwort und gib sie als JSON zurueck.
-
-Format IMMER so:
-{"antwort":"..."}
-
-Regeln fuer die Antwort:
-- "value" ist der fertige Wert inkl. Einheit — einfach uebernehmen, nicht umrechnen
-- Bei binary_sensor: "on" = offen/aktiv, "off" = geschlossen/inaktiv
-- Bei Lichtern/Schaltern: "on" = an, "off" = aus
-- Bei Rollo/Cover: "current_position" aus attributes in Prozent
-- Falls gefragte Information nicht in Daten ist, das ehrlich sagen
-- Kurzer, direkter deutscher Satz, keine Einleitungen, keine Markdown-Formatierung"""
+    system_prompt = _build_prompt("state_formatter")
 
     user_content = f"Frage: {transcript}\n\nLive-Daten aus Home Assistant:\n{data_block}\n\nAntworte jetzt NUR mit JSON im Format {{\"antwort\":\"...\"}}."
 
