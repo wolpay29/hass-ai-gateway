@@ -100,6 +100,10 @@ TTS_RATE: int = int(os.getenv("TTS_RATE", "165"))
 BEEP_FREQ: int = 880
 BEEP_MS: int   = 120
 
+# Debug: set DEBUG=true to print wake word score and RMS on every audio chunk.
+# Useful for tuning WAKE_THRESHOLD and VAD_SILENCE_THRESHOLD.
+DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+
 # Speaker volume set at startup via amixer. Format: "80%" or leave empty to skip.
 SPEAKER_VOLUME: str = os.getenv("SPEAKER_VOLUME", "100%")
 # ALSA card number derived from ALSA_OUTPUT_DEVICE (e.g. plughw:1,0 → card 1)
@@ -236,6 +240,9 @@ def _record_command(stream: sd.InputStream) -> bytes | None:
         frames.append(chunk)
         elapsed = time.time() - start_time
 
+        if DEBUG:
+            logger.info(f"[Debug] state=recording   rms={rms:.0f}/{VAD_SILENCE_THRESHOLD}  speech_started={speech_started}")
+
         if rms > VAD_SILENCE_THRESHOLD:
             speech_started = True
             silence_start = None
@@ -339,6 +346,10 @@ def main() -> None:
             prediction = oww.predict(chunk)
 
             score = max(prediction.values()) if prediction else 0.0
+
+            if DEBUG:
+                rms = _rms(chunk)
+                logger.info(f"[Debug] state=listening  score={score:.3f}/{WAKE_THRESHOLD}  rms={rms:.0f}/{VAD_SILENCE_THRESHOLD}")
 
             if score >= WAKE_THRESHOLD:
                 logger.info(f"[WakeWord] Detected '{WAKE_WORD}' (score={score:.2f})")
