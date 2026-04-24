@@ -192,9 +192,9 @@ def _rms(chunk: np.ndarray) -> float:
     return float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2)))
 
 
-def _record_command() -> bytes | None:
+def _record_command(stream: sd.InputStream) -> bytes | None:
     """
-    Record audio until VAD silence is detected.
+    Record audio from the already-open wake word stream until VAD silence.
     Returns raw 16-bit PCM bytes (mono, 16 kHz) or None if too short.
     """
     logger.info("[Record] Listening for command…")
@@ -203,28 +203,26 @@ def _record_command() -> bytes | None:
     speech_started = False
     start_time = time.time()
 
-    with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
-                        blocksize=CHUNK_FRAMES, device=AUDIO_INPUT_DEVICE) as stream:
-        while True:
-            chunk, _ = stream.read(CHUNK_FRAMES)
-            chunk = chunk[:, 0]  # mono
-            rms = _rms(chunk)
-            frames.append(chunk)
-            elapsed = time.time() - start_time
+    while True:
+        chunk, _ = stream.read(CHUNK_FRAMES)
+        chunk = chunk[:, 0]  # mono
+        rms = _rms(chunk)
+        frames.append(chunk)
+        elapsed = time.time() - start_time
 
-            if rms > VAD_SILENCE_THRESHOLD:
-                speech_started = True
-                silence_start = None
-            elif speech_started:
-                if silence_start is None:
-                    silence_start = time.time()
-                elif time.time() - silence_start >= VAD_SILENCE_DURATION:
-                    logger.info("[Record] Silence detected — end of command")
-                    break
-
-            if elapsed >= VAD_MAX_DURATION:
-                logger.info("[Record] Max duration reached")
+        if rms > VAD_SILENCE_THRESHOLD:
+            speech_started = True
+            silence_start = None
+        elif speech_started:
+            if silence_start is None:
+                silence_start = time.time()
+            elif time.time() - silence_start >= VAD_SILENCE_DURATION:
+                logger.info("[Record] Silence detected — end of command")
                 break
+
+        if elapsed >= VAD_MAX_DURATION:
+            logger.info("[Record] Max duration reached")
+            break
 
     pcm = np.concatenate(frames)
     duration = len(pcm) / SAMPLE_RATE
@@ -303,9 +301,8 @@ def main() -> None:
             chunk, _ = stream.read(CHUNK_FRAMES)
             chunk = chunk[:, 0]
 
-            # openwakeword expects float32 in [-1, 1]
-            audio_f32 = chunk.astype(np.float32) / 32768.0
-            prediction = oww.predict(audio_f32)
+            # openwakeword expects raw int16 audio
+            prediction = oww.predict(chunk)
 
             score = max(prediction.values()) if prediction else 0.0
             rms = _rms(chunk)
@@ -318,7 +315,7 @@ def main() -> None:
 
                 _beep()
 
-                pcm = _record_command()
+                pcm = _record_command(stream)
                 if pcm is None:
                     _speak("Entschuldigung, ich habe nichts gehört.")
                     continue
