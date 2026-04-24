@@ -1,8 +1,19 @@
 # Raspberry Pi voice client dependencies
-# Install on the RPi with:  pip install -r requirements.txt
+#
+# INSTALL ORDER MATTERS — run these two commands in sequence:
+#
+#   pip install openwakeword --no-deps
+#   pip install -r requirements.txt
+#
+# Why: openwakeword declares tflite-runtime as a dependency but tflite has no
+# Python 3.13 wheel for ARM64. We use inference_framework="onnx" so tflite is
+# never loaded at runtime — installing without deps skips it safely.
 
-# Wake word detection (pulls ONNX models automatically on first run)
-openwakeword>=0.6.0
+# openwakeword ONNX-backend runtime deps (replaces tflite)
+onnxruntime>=1.10.0,<2
+scipy>=1.3,<2
+scikit-learn>=1,<2
+tqdm>=4.0,<5
 
 # Audio I/O
 sounddevice>=0.4.6

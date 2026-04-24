@@ -181,16 +181,21 @@ On the Pi:
 cd ~/voice
 python3 -m venv venv
 source venv/bin/activate
+
+# Install openwakeword without its tflite dependency first.
+# tflite-runtime has no Python 3.13 wheel for ARM64.
+# We use ONNX inference only, so tflite is never needed at runtime.
+pip install openwakeword --no-deps
+
+# Install everything else (includes the ONNX runtime deps openwakeword needs)
 pip install -r requirements.txt
 ```
 
 openwakeword will download its ONNX model files (~50 MB) on first run automatically.
 
-### 4. Find the Correct sounddevice Indices
+### 4. Find the Correct Mic Device Index
 
-The script uses sounddevice which maps to ALSA device indices — mic (input) and speaker (output) can have **different** index numbers even on the same card.
-
-Run this on the Pi:
+The script uses sounddevice only for mic input (recording + wake word). Run this to find the ReSpeaker's input index:
 
 ```bash
 source ~/voice/venv/bin/activate
@@ -200,11 +205,10 @@ python3 -c "import sounddevice; print(sounddevice.query_devices())"
 Example output:
 ```
  0 bcm2835 Headphones: - (hw:0,0), output
- 1 seeed2micvoicec: - (hw:1,0), input       <-- mic input index
- 2 seeed2micvoicec: - (hw:1,0), output      <-- speaker output index
+>  1 seeed2micvoicec: - (hw:1,0), input+output   <-- use this index for AUDIO_INPUT_DEVICE
 ```
 
-Note the two separate indices for input and output on the HAT (here `1` and `2`).
+All audio output (beep + TTS) goes through `aplay` directly via `ALSA_OUTPUT_DEVICE=plughw:1,0` — no sounddevice output index needed.
 
 ### 5. Download a Piper Voice Model
 
@@ -212,36 +216,29 @@ Piper is a neural TTS engine that sounds significantly better than espeak. Voice
 
 Recommended German voices:
 
-| Model | Quality | Size | Style |
-|---|---|---|---|
-| `de_DE-thorsten-high` | High | ~65 MB | Male, natural |
-| `de_DE-thorsten_emotional-medium` | Medium | ~30 MB | Male, expressive |
-| `de_DE-eva_k-x_low` | Low | ~5 MB | Female, fast |
+| Model | Quality | Sample Rate | Size | Style |
+|---|---|---|---|---|
+| `de_DE-thorsten-low` | Good | 16000 Hz | ~16 MB | Male — **use this, works on ReSpeaker HAT** |
+| `de_DE-thorsten-high` | High | 22050 Hz | ~108 MB | Male — does NOT work on ReSpeaker HAT (unsupported rate) |
 
-Download on the Pi (example — thorsten high quality):
+> **Important:** The ReSpeaker HAT's WM8960 driver only supports sample rates that are multiples of 8000 Hz (8000, 16000, 32000, 48000). The `high` quality models output at 22050 Hz which is incompatible. Use `thorsten-low` (16000 Hz).
+
+Download on the Pi:
 
 ```bash
 mkdir -p ~/voice/models
-cd ~/voice/models
-
-wget https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx
-wget https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx.json
+wget -P ~/voice/models https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/low/de_DE-thorsten-low.onnx
+wget -P ~/voice/models https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/low/de_DE-thorsten-low.onnx.json
 ```
+
+Both files (`.onnx` + `.onnx.json`) must be in the same folder.
 
 Test it before running the full client:
 
 ```bash
-source ~/voice/venv/bin/activate
 echo "Hallo, ich bin dein Sprachassistent." | \
-  python3 -c "
-import sys, sounddevice as sd, numpy as np
-from piper.voice import PiperVoice
-v = PiperVoice.load('models/de_DE-thorsten-high.onnx')
-raw = b''.join(v.synthesize_stream_raw(sys.stdin.read()))
-audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-sd.play(audio, samplerate=v.config.sample_rate)
-sd.wait()
-"
+  piper --model ~/voice/models/de_DE-thorsten-low.onnx --output-raw | \
+  aplay -D plughw:1,0 -r 16000 -f S16_LE -c 1
 ```
 
 ### 6. Configure Environment Variables
@@ -255,8 +252,8 @@ GATEWAY_API_KEY=
 DEVICE_ID=rpi-wohnzimmer
 WAKE_WORD=hey_jarvis
 AUDIO_INPUT_DEVICE=1
-AUDIO_OUTPUT_DEVICE=2
-TTS_MODEL=/home/pi/voice/models/de_DE-thorsten-high.onnx
+ALSA_OUTPUT_DEVICE=plughw:1,0
+TTS_MODEL=/home/pi/voice/models/de_DE-thorsten-low.onnx
 WAKE_THRESHOLD=0.5
 EOF
 ```
@@ -266,7 +263,7 @@ EOF
 - `DEVICE_ID`: A name for this Pi. Use your Telegram chat_id here (numeric) to share conversation history with the Telegram bot.
 - `WAKE_WORD`: Built-in choices: `hey_jarvis`, `alexa`, `hey_mycroft`, `hey_rhasspy`.
 - `AUDIO_INPUT_DEVICE`: The mic (input) index from Step 4.
-- `AUDIO_OUTPUT_DEVICE`: The speaker (output) index from Step 4. Used for both the acknowledgement beep and TTS — the script derives the ALSA device automatically.
+- `ALSA_OUTPUT_DEVICE`: ALSA device for all audio output (beep + TTS). Use `plughw:X,0` format — the `plughw` plugin handles sample rate and mono/stereo conversion automatically. Usually `plughw:1,0` for the ReSpeaker HAT.
 - `TTS_MODEL`: Path to your downloaded Piper `.onnx` model file. Leave empty to fall back to espeak.
 
 Load the `.env` when running the script:

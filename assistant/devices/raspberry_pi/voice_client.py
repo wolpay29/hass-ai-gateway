@@ -13,8 +13,11 @@ Requirements: see requirements.txt
 Config: edit the CONFIG block below or set the matching env vars.
 """
 import io
+import json
 import os
 import re
+import subprocess
+import sys
 import time
 import wave
 import logging
@@ -38,16 +41,19 @@ GATEWAY_URL: str     = os.getenv("GATEWAY_URL",     "http://10.1.10.78:8765")
 GATEWAY_API_KEY: str = os.getenv("GATEWAY_API_KEY", "")
 DEVICE_ID: str       = os.getenv("DEVICE_ID",       "rpi-wohnzimmer")
 
-# sounddevice device indices for the ReSpeaker HAT.
+# AUDIO_INPUT_DEVICE: sounddevice index for the mic (recording + wake word).
 # Run: python3 -c "import sounddevice; print(sounddevice.query_devices())"
-# Input (mic) and output (speaker/beep) may have different indices on the same card.
-# Leave unset to use the system ALSA default (requires ~/.asoundrc).
+# Leave unset to use the system ALSA default.
 def _parse_device(env_key: str) -> "int | None":
     v = os.getenv(env_key, "").strip()
     return int(v) if v.lstrip("-").isdigit() else None
 
-AUDIO_INPUT_DEVICE: int | None  = _parse_device("AUDIO_INPUT_DEVICE")
-AUDIO_OUTPUT_DEVICE: int | None = _parse_device("AUDIO_OUTPUT_DEVICE")
+AUDIO_INPUT_DEVICE: int | None = _parse_device("AUDIO_INPUT_DEVICE")
+
+# ALSA_OUTPUT_DEVICE: used by aplay for beep + TTS output.
+# Use plughw:X,0 format — plughw handles sample rate and mono/stereo conversion.
+# Default: plughw:1,0 (ReSpeaker HAT on card 1).
+ALSA_OUTPUT_DEVICE: str = os.getenv("ALSA_OUTPUT_DEVICE", "plughw:1,0")
 
 # Wake word model — openwakeword built-in choices:
 #   "hey_jarvis", "alexa", "hey_mycroft", "hey_rhasspy", "timer", "weather"
@@ -82,36 +88,58 @@ BEEP_MS: int   = 120
 
 
 # ---------------------------------------------------------------------------
-# TTS — Piper (primary) or pyttsx3 (fallback)
+# Audio output — all playback goes through aplay (proven to work with HAT)
 # ---------------------------------------------------------------------------
 
-_piper_voice = None
+def _aplay(wav_bytes: bytes) -> None:
+    """Play a WAV byte buffer through aplay. plughw handles rate/format conversion."""
+    subprocess.run(
+        ["aplay", "-D", ALSA_OUTPUT_DEVICE, "-q", "-"],
+        input=wav_bytes,
+        check=False,
+    )
+
+
+def _beep() -> None:
+    t = np.linspace(0, BEEP_MS / 1000, int(SAMPLE_RATE * BEEP_MS / 1000), False)
+    tone = (0.4 * np.sin(2 * np.pi * BEEP_FREQ * t) * 32767).astype(np.int16)
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(tone.tobytes())
+    _aplay(buf.getvalue())
+
+
+# ---------------------------------------------------------------------------
+# TTS — Piper binary (primary) or pyttsx3 (fallback)
+# ---------------------------------------------------------------------------
+
+# Path to the piper binary — lives in the same venv bin as this Python.
+_PIPER_BIN = str(Path(sys.executable).parent / "piper")
+
+_piper_sample_rate: int | None = None
 _pyttsx3_engine = None
 
 
 def _init_tts() -> None:
-    global _piper_voice, _pyttsx3_engine
+    global _piper_sample_rate, _pyttsx3_engine
 
     if TTS_MODEL and Path(TTS_MODEL).is_file():
-        from piper.voice import PiperVoice
-        logger.info(f"[TTS] Loading Piper model: {TTS_MODEL}")
-        _piper_voice = PiperVoice.load(TTS_MODEL)
-        logger.info(f"[TTS] Piper ready (sample_rate={_piper_voice.config.sample_rate})")
+        config_path = Path(TTS_MODEL).with_suffix(".onnx.json")
+        with open(config_path, encoding="utf-8") as f:
+            config = json.load(f)
+        _piper_sample_rate = config["audio"]["sample_rate"]
+        logger.info(f"[TTS] Piper model: {TTS_MODEL} (sample_rate={_piper_sample_rate})")
     else:
         if TTS_MODEL:
             logger.warning(f"[TTS] Piper model not found at '{TTS_MODEL}', falling back to pyttsx3")
         else:
             logger.info("[TTS] No TTS_MODEL set, using pyttsx3/espeak")
 
-        # Route espeak to the correct ALSA output device derived from the sounddevice index
-        if AUDIO_OUTPUT_DEVICE is not None:
-            info = sd.query_devices(AUDIO_OUTPUT_DEVICE)
-            m = re.search(r"hw:(\d+),(\d+)", info.get("name", ""))
-            if m:
-                os.environ["AUDIODEV"] = f"hw:{m.group(1)},{m.group(2)}"
-                logger.info(f"[TTS] espeak routed to AUDIODEV={os.environ['AUDIODEV']}")
-
         import pyttsx3
+        os.environ["AUDIODEV"] = ALSA_OUTPUT_DEVICE.replace("plughw:", "hw:")
         _pyttsx3_engine = pyttsx3.init()
         _pyttsx3_engine.setProperty("rate", TTS_RATE)
         for voice in _pyttsx3_engine.getProperty("voices"):
@@ -125,26 +153,29 @@ def _speak(text: str) -> None:
         return
     logger.info(f"[TTS] Speaking: {text!r}")
 
-    if _piper_voice is not None:
-        raw = b"".join(_piper_voice.synthesize_stream_raw(text))
-        audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-        sd.play(audio, samplerate=_piper_voice.config.sample_rate, device=AUDIO_OUTPUT_DEVICE)
-        sd.wait()
+    if _piper_sample_rate is not None:
+        p1 = subprocess.Popen(
+            [_PIPER_BIN, "--model", TTS_MODEL, "--output-raw"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        p2 = subprocess.Popen(
+            ["aplay", "-D", ALSA_OUTPUT_DEVICE, "-q",
+             "-r", str(_piper_sample_rate), "-f", "S16_LE", "-c", "1"],
+            stdin=p1.stdout,
+        )
+        p1.stdout.close()
+        p1.communicate(input=text.encode())
+        p2.wait()
     else:
         _pyttsx3_engine.say(text)
         _pyttsx3_engine.runAndWait()
 
 
 # ---------------------------------------------------------------------------
-# Audio helpers
+# Audio input helpers
 # ---------------------------------------------------------------------------
-
-def _beep() -> None:
-    t = np.linspace(0, BEEP_MS / 1000, int(SAMPLE_RATE * BEEP_MS / 1000), False)
-    tone = (0.4 * np.sin(2 * np.pi * BEEP_FREQ * t)).astype(np.float32)
-    sd.play(tone, samplerate=SAMPLE_RATE, device=AUDIO_OUTPUT_DEVICE)
-    sd.wait()
-
 
 def _rms(chunk: np.ndarray) -> float:
     return float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2)))
@@ -253,6 +284,7 @@ def main() -> None:
     oww = WakeWordModel(wakeword_models=[WAKE_WORD], inference_framework="onnx")
     logger.info(f"[Init] Listening for '{WAKE_WORD}' on device '{DEVICE_ID}'")
     logger.info(f"[Init] Gateway: {GATEWAY_URL}")
+    logger.info(f"[Init] Audio output: {ALSA_OUTPUT_DEVICE}")
 
     with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
                         blocksize=CHUNK_FRAMES, device=AUDIO_INPUT_DEVICE) as stream:
