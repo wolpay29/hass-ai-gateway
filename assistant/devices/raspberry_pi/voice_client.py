@@ -23,6 +23,10 @@ import wave
 import logging
 from pathlib import Path
 
+# Load .env from the same directory as this script automatically.
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")
+
 import numpy as np
 import requests
 import sounddevice as sd
@@ -41,19 +45,26 @@ GATEWAY_URL: str     = os.getenv("GATEWAY_URL",     "http://10.1.10.78:8765")
 GATEWAY_API_KEY: str = os.getenv("GATEWAY_API_KEY", "")
 DEVICE_ID: str       = os.getenv("DEVICE_ID",       "rpi-wohnzimmer")
 
-# AUDIO_INPUT_DEVICE: sounddevice index for the mic (recording + wake word).
-# Run: python3 -c "import sounddevice; print(sounddevice.query_devices())"
-# Leave unset to use the system ALSA default.
-def _parse_device(env_key: str) -> "int | None":
-    v = os.getenv(env_key, "").strip()
-    return int(v) if v.lstrip("-").isdigit() else None
-
-AUDIO_INPUT_DEVICE: int | None = _parse_device("AUDIO_INPUT_DEVICE")
-
-# ALSA_OUTPUT_DEVICE: used by aplay for beep + TTS output.
-# Use plughw:X,0 format — plughw handles sample rate and mono/stereo conversion.
-# Default: plughw:1,0 (ReSpeaker HAT on card 1).
+# ALSA device strings — use plughw:X,0 format for both input and output.
+# Same format as arecord/aplay commands. Default: plughw:1,0 (ReSpeaker HAT).
+ALSA_INPUT_DEVICE: str  = os.getenv("ALSA_INPUT_DEVICE",  "plughw:1,0")
 ALSA_OUTPUT_DEVICE: str = os.getenv("ALSA_OUTPUT_DEVICE", "plughw:1,0")
+
+# Derive the sounddevice index from the ALSA card number in ALSA_INPUT_DEVICE.
+# sounddevice needs an integer index for its InputStream used in wake word detection.
+def _resolve_input_device(alsa_dev: str) -> "int | None":
+    m = re.search(r":(\d+),", alsa_dev)
+    if not m:
+        return None
+    card = m.group(1)
+    for i, dev in enumerate(sd.query_devices()):
+        name = dev.get("name", "")
+        if f"hw:{card}," in name and dev.get("max_input_channels", 0) > 0:
+            return i
+    return None
+
+AUDIO_INPUT_DEVICE: int | None = _resolve_input_device(ALSA_INPUT_DEVICE)
+logger.info(f"[Audio] Input: {ALSA_INPUT_DEVICE} → sounddevice index {AUDIO_INPUT_DEVICE}")
 
 # Wake word model — openwakeword built-in choices:
 #   "hey_jarvis", "alexa", "hey_mycroft", "hey_rhasspy", "timer", "weather"

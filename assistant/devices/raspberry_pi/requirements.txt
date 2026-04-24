@@ -22,6 +22,9 @@ numpy>=1.24
 # HTTP client
 requests>=2.31
 
+# Auto-load .env file
+python-dotenv>=1.0
+
 # TTS — Piper (high quality neural, primary) + pyttsx3 (espeak fallback)
 piper-tts>=1.2.0
 pyttsx3>=2.90

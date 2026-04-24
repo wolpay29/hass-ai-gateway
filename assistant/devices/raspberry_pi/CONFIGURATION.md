@@ -193,22 +193,17 @@ pip install -r requirements.txt
 
 openwakeword will download its ONNX model files (~50 MB) on first run automatically.
 
-### 4. Find the Correct Mic Device Index
+### 4. Identify the ALSA Device
 
-The script uses sounddevice only for mic input (recording + wake word). Run this to find the ReSpeaker's input index:
+Both input and output use the same `plughw:X,0` format — the same device name you use in `arecord`/`aplay` commands.
 
+Find the card number:
 ```bash
-source ~/voice/venv/bin/activate
-python3 -c "import sounddevice; print(sounddevice.query_devices())"
+arecord -l
+aplay -l
 ```
 
-Example output:
-```
- 0 bcm2835 Headphones: - (hw:0,0), output
->  1 seeed2micvoicec: - (hw:1,0), input+output   <-- use this index for AUDIO_INPUT_DEVICE
-```
-
-All audio output (beep + TTS) goes through `aplay` directly via `ALSA_OUTPUT_DEVICE=plughw:1,0` — no sounddevice output index needed.
+Look for `seeed2micvoicec` — usually card 1. This gives you `plughw:1,0` for both input and output. The script automatically derives the sounddevice index from this string internally.
 
 ### 5. Download a Piper Voice Model
 
@@ -251,7 +246,7 @@ GATEWAY_URL=http://10.1.10.78:8765
 GATEWAY_API_KEY=
 DEVICE_ID=rpi-wohnzimmer
 WAKE_WORD=hey_jarvis
-AUDIO_INPUT_DEVICE=1
+ALSA_INPUT_DEVICE=plughw:1,0
 ALSA_OUTPUT_DEVICE=plughw:1,0
 TTS_MODEL=/home/pi/voice/models/de_DE-thorsten-low.onnx
 WAKE_THRESHOLD=0.5
@@ -262,16 +257,15 @@ EOF
 - `GATEWAY_API_KEY`: Leave empty if you did not set one in the gateway's `.env`.
 - `DEVICE_ID`: A name for this Pi. Use your Telegram chat_id here (numeric) to share conversation history with the Telegram bot.
 - `WAKE_WORD`: Built-in choices: `hey_jarvis`, `alexa`, `hey_mycroft`, `hey_rhasspy`.
-- `AUDIO_INPUT_DEVICE`: The mic (input) index from Step 4.
-- `ALSA_OUTPUT_DEVICE`: ALSA device for all audio output (beep + TTS). Use `plughw:X,0` format — the `plughw` plugin handles sample rate and mono/stereo conversion automatically. Usually `plughw:1,0` for the ReSpeaker HAT.
+- `ALSA_INPUT_DEVICE`: ALSA device for mic input. Same format as `arecord -D`. Usually `plughw:1,0`.
+- `ALSA_OUTPUT_DEVICE`: ALSA device for all audio output (beep + TTS). Same format as `aplay -D`. Usually `plughw:1,0`.
 - `TTS_MODEL`: Path to your downloaded Piper `.onnx` model file. Leave empty to fall back to espeak.
 
-Load the `.env` when running the script:
+The script loads `.env` automatically — just run it directly:
 
 ```bash
 cd ~/voice
 source venv/bin/activate
-export $(grep -v '^#' .env | xargs)
 python3 voice_client.py
 ```
 
@@ -356,7 +350,7 @@ journalctl -u voice-client -f
 |---|---|---|
 | `curl /health` times out | Voice Gateway not running on PC | Start `python assistant/services/voice_gateway/main.py` on your PC |
 | `{"error":"no_speech"}` from gateway | Mic not capturing audio | Re-run amixer commands from Section 4 above |
-| `sounddevice.PortAudioError: Invalid device` | Wrong `AUDIO_INPUT_DEVICE` or `AUDIO_OUTPUT_DEVICE` | Run `python3 -c "import sounddevice; print(sounddevice.query_devices())"` and update `.env` |
+| `sounddevice.PortAudioError: Invalid device` | Wrong `ALSA_INPUT_DEVICE` card number | Run `arecord -l` to confirm the card number and update `ALSA_INPUT_DEVICE` in `.env` |
 | TTS speaks but no sound from HAT speaker | Speaker output not routed | Re-run amixer output commands and `sudo alsactl store` |
 | Wake word never fires | Threshold too high or wrong wake word | Lower `WAKE_THRESHOLD` to `0.3`, or check `WAKE_WORD` spelling |
 | `pyttsx3` init error | espeak not installed | `sudo apt install espeak espeak-data libespeak-dev` |
