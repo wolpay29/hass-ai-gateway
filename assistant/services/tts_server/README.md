@@ -2,20 +2,37 @@
 
 Piper TTS wrapped in a FastAPI HTTP server. Called by the Voice Gateway to synthesize reply text into WAV audio.
 
+## Auto-start on reboot
+
+The container has `restart: unless-stopped` set, so Docker will restart it automatically after a host reboot. You only need to ensure the Docker daemon itself starts on boot — this is a one-time host setup:
+
+```bash
+# Linux
+sudo systemctl enable docker
+```
+
+On **Windows**, go to Docker Desktop → Settings → General → enable "Start Docker Desktop when you log in".
+
 ## Setup
 
 ```bash
-# 1. Download a voice model
-mkdir -p models
-wget -P models https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/low/de_DE-thorsten-low.onnx
-wget -P models https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/low/de_DE-thorsten-low.onnx.json
-
-# 2. Start
+# Start — model is downloaded automatically on first run
 docker compose up -d
 
-# 3. Verify
+# Restart
+docker compose restart
+
+# Stop
+docker compose down
+
+# Logs (follow)
+docker compose logs -f
+
+# Verify
 curl http://localhost:10400/health
 ```
+
+The entrypoint script checks whether the model files are present in `./models/` and downloads them from HuggingFace if not. Subsequent starts skip the download.
 
 ## Config (docker-compose.yml environment)
 
