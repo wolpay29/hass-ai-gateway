@@ -308,6 +308,9 @@ def main() -> None:
             prediction = oww.predict(audio_f32)
 
             score = max(prediction.values()) if prediction else 0.0
+            rms = _rms(chunk)
+            if rms > 0.001:
+                logger.info(f"[WakeWord] RMS={rms:.4f} Score={score:.3f} (threshold={WAKE_THRESHOLD})")
 
             if score >= WAKE_THRESHOLD:
                 logger.info(f"[WakeWord] Detected '{WAKE_WORD}' (score={score:.2f})")
