@@ -6,7 +6,7 @@ Flow:
   2. On detection: play an acknowledgement beep, start recording
   3. Record until VAD silence (1.5 s of quiet after speech begins)
   4. POST the WAV to the voice gateway /audio endpoint
-  5. Speak back the reply via pyttsx3 (offline TTS)
+  5. Speak back the reply via Piper TTS (or pyttsx3 if no model configured)
   6. Repeat
 
 Requirements: see requirements.txt
@@ -14,16 +14,15 @@ Config: edit the CONFIG block below or set the matching env vars.
 """
 import io
 import os
+import re
 import time
 import wave
 import logging
-import threading
 from pathlib import Path
 
 import numpy as np
 import requests
 import sounddevice as sd
-import pyttsx3
 from openwakeword.model import Model as WakeWordModel
 
 logging.basicConfig(
@@ -38,6 +37,17 @@ logger = logging.getLogger(__name__)
 GATEWAY_URL: str     = os.getenv("GATEWAY_URL",     "http://10.1.10.78:8765")
 GATEWAY_API_KEY: str = os.getenv("GATEWAY_API_KEY", "")
 DEVICE_ID: str       = os.getenv("DEVICE_ID",       "rpi-wohnzimmer")
+
+# sounddevice device indices for the ReSpeaker HAT.
+# Run: python3 -c "import sounddevice; print(sounddevice.query_devices())"
+# Input (mic) and output (speaker/beep) may have different indices on the same card.
+# Leave unset to use the system ALSA default (requires ~/.asoundrc).
+def _parse_device(env_key: str) -> "int | None":
+    v = os.getenv(env_key, "").strip()
+    return int(v) if v.lstrip("-").isdigit() else None
+
+AUDIO_INPUT_DEVICE: int | None  = _parse_device("AUDIO_INPUT_DEVICE")
+AUDIO_OUTPUT_DEVICE: int | None = _parse_device("AUDIO_OUTPUT_DEVICE")
 
 # Wake word model — openwakeword built-in choices:
 #   "hey_jarvis", "alexa", "hey_mycroft", "hey_rhasspy", "timer", "weather"
@@ -57,7 +67,13 @@ VAD_MIN_DURATION: float      = 0.4     # ignore clips shorter than this
 # Detection threshold (0–1). Lower = more sensitive but more false positives.
 WAKE_THRESHOLD: float = float(os.getenv("WAKE_THRESHOLD", "0.5"))
 
-# TTS engine rate (words per minute). Adjust to taste.
+# Piper TTS model path — set this to use high-quality neural TTS.
+# Download a voice from: https://huggingface.co/rhasspy/piper-voices
+# Example: ~/voice/models/de_DE-thorsten-high.onnx
+# Leave empty to fall back to pyttsx3/espeak.
+TTS_MODEL: str = os.getenv("TTS_MODEL", "")
+
+# pyttsx3 fallback settings (only used when TTS_MODEL is not set)
 TTS_RATE: int = int(os.getenv("TTS_RATE", "165"))
 
 # Beep: frequency (Hz) and duration (ms) played on wake detection
@@ -66,23 +82,57 @@ BEEP_MS: int   = 120
 
 
 # ---------------------------------------------------------------------------
-# TTS — initialised once, reused across replies
+# TTS — Piper (primary) or pyttsx3 (fallback)
 # ---------------------------------------------------------------------------
-_tts_engine = pyttsx3.init()
-_tts_engine.setProperty("rate", TTS_RATE)
-# Pick a German voice if available; fall back to system default
-for voice in _tts_engine.getProperty("voices"):
-    if "german" in voice.name.lower() or "de" in voice.id.lower():
-        _tts_engine.setProperty("voice", voice.id)
-        break
+
+_piper_voice = None
+_pyttsx3_engine = None
+
+
+def _init_tts() -> None:
+    global _piper_voice, _pyttsx3_engine
+
+    if TTS_MODEL and Path(TTS_MODEL).is_file():
+        from piper.voice import PiperVoice
+        logger.info(f"[TTS] Loading Piper model: {TTS_MODEL}")
+        _piper_voice = PiperVoice.load(TTS_MODEL)
+        logger.info(f"[TTS] Piper ready (sample_rate={_piper_voice.config.sample_rate})")
+    else:
+        if TTS_MODEL:
+            logger.warning(f"[TTS] Piper model not found at '{TTS_MODEL}', falling back to pyttsx3")
+        else:
+            logger.info("[TTS] No TTS_MODEL set, using pyttsx3/espeak")
+
+        # Route espeak to the correct ALSA output device derived from the sounddevice index
+        if AUDIO_OUTPUT_DEVICE is not None:
+            info = sd.query_devices(AUDIO_OUTPUT_DEVICE)
+            m = re.search(r"hw:(\d+),(\d+)", info.get("name", ""))
+            if m:
+                os.environ["AUDIODEV"] = f"hw:{m.group(1)},{m.group(2)}"
+                logger.info(f"[TTS] espeak routed to AUDIODEV={os.environ['AUDIODEV']}")
+
+        import pyttsx3
+        _pyttsx3_engine = pyttsx3.init()
+        _pyttsx3_engine.setProperty("rate", TTS_RATE)
+        for voice in _pyttsx3_engine.getProperty("voices"):
+            if "german" in voice.name.lower() or "de" in voice.id.lower():
+                _pyttsx3_engine.setProperty("voice", voice.id)
+                break
 
 
 def _speak(text: str) -> None:
     if not text:
         return
     logger.info(f"[TTS] Speaking: {text!r}")
-    _tts_engine.say(text)
-    _tts_engine.runAndWait()
+
+    if _piper_voice is not None:
+        raw = b"".join(_piper_voice.synthesize_stream_raw(text))
+        audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+        sd.play(audio, samplerate=_piper_voice.config.sample_rate, device=AUDIO_OUTPUT_DEVICE)
+        sd.wait()
+    else:
+        _pyttsx3_engine.say(text)
+        _pyttsx3_engine.runAndWait()
 
 
 # ---------------------------------------------------------------------------
@@ -90,10 +140,9 @@ def _speak(text: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _beep() -> None:
-    """Play a short sine-wave beep to acknowledge the wake word."""
     t = np.linspace(0, BEEP_MS / 1000, int(SAMPLE_RATE * BEEP_MS / 1000), False)
     tone = (0.4 * np.sin(2 * np.pi * BEEP_FREQ * t)).astype(np.float32)
-    sd.play(tone, samplerate=SAMPLE_RATE)
+    sd.play(tone, samplerate=SAMPLE_RATE, device=AUDIO_OUTPUT_DEVICE)
     sd.wait()
 
 
@@ -113,7 +162,7 @@ def _record_command() -> bytes | None:
     start_time = time.time()
 
     with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
-                        blocksize=CHUNK_FRAMES) as stream:
+                        blocksize=CHUNK_FRAMES, device=AUDIO_INPUT_DEVICE) as stream:
         while True:
             chunk, _ = stream.read(CHUNK_FRAMES)
             chunk = chunk[:, 0]  # mono
@@ -198,15 +247,15 @@ def _send_audio(wav_bytes: bytes) -> str:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    _init_tts()
+
     logger.info(f"[Init] Loading wake word model: '{WAKE_WORD}'")
     oww = WakeWordModel(wakeword_models=[WAKE_WORD], inference_framework="onnx")
     logger.info(f"[Init] Listening for '{WAKE_WORD}' on device '{DEVICE_ID}'")
     logger.info(f"[Init] Gateway: {GATEWAY_URL}")
 
-    chunk_buffer = np.zeros(CHUNK_FRAMES, dtype=np.int16)
-
     with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
-                        blocksize=CHUNK_FRAMES) as stream:
+                        blocksize=CHUNK_FRAMES, device=AUDIO_INPUT_DEVICE) as stream:
         while True:
             chunk, _ = stream.read(CHUNK_FRAMES)
             chunk = chunk[:, 0]
@@ -215,12 +264,11 @@ def main() -> None:
             audio_f32 = chunk.astype(np.float32) / 32768.0
             prediction = oww.predict(audio_f32)
 
-            # prediction is a dict {model_name: score}
             score = max(prediction.values()) if prediction else 0.0
 
             if score >= WAKE_THRESHOLD:
                 logger.info(f"[WakeWord] Detected '{WAKE_WORD}' (score={score:.2f})")
-                oww.reset()  # clear sliding window so it doesn't fire again immediately
+                oww.reset()
 
                 _beep()
 
