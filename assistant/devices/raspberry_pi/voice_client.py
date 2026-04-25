@@ -97,8 +97,8 @@ TTS_MODEL: str = os.getenv("TTS_MODEL", "")
 TTS_RATE: int = int(os.getenv("TTS_RATE", "165"))
 
 # Beep: frequency (Hz) and duration (ms) played on wake detection
-BEEP_FREQ: int = 880
-BEEP_MS: int   = 120
+BEEP_FREQ: int = 520
+BEEP_MS: int   = 200
 
 # Debug: set DEBUG=true to print wake word score and RMS on every audio chunk.
 # Useful for tuning WAKE_THRESHOLD and VAD_SILENCE_THRESHOLD.
@@ -124,20 +124,23 @@ def _aplay(wav_bytes: bytes) -> None:
     )
 
 
-# Pre-generate beep at startup so playback is instant on detection.
-_BEEP_TONE = (0.4 * np.sin(
-    2 * np.pi * BEEP_FREQ * np.linspace(0, BEEP_MS / 1000, int(SAMPLE_RATE * BEEP_MS / 1000), False)
-)).astype(np.float32)
-
-
 def _beep() -> None:
-    # Use sounddevice directly — no subprocess overhead, instant playback.
-    # 16000 Hz works on the ReSpeaker HAT (unlike Piper's 22050 Hz).
-    try:
-        sd.play(_BEEP_TONE, samplerate=SAMPLE_RATE, device=AUDIO_INPUT_DEVICE)
-        sd.wait()
-    except Exception:
-        pass  # silent fail — beep is non-critical
+    n = int(SAMPLE_RATE * BEEP_MS / 1000)
+    t = np.linspace(0, BEEP_MS / 1000, n, False)
+    tone = np.sin(2 * np.pi * BEEP_FREQ * t)
+    # soft fade-in / fade-out over 20% of the tone length to avoid clicks
+    fade = int(n * 0.2)
+    envelope = np.ones(n)
+    envelope[:fade] = np.linspace(0, 1, fade)
+    envelope[-fade:] = np.linspace(1, 0, fade)
+    tone = (tone * envelope * 0.2 * 32767).astype(np.int16)
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(tone.tobytes())
+    _aplay(buf.getvalue())
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +330,6 @@ def _send_audio(wav_bytes: bytes) -> tuple[bytes | None, str]:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    _set_volume()
     _init_tts()
 
     logger.info(f"[Init] Loading wake word model: '{WAKE_WORD}'")
