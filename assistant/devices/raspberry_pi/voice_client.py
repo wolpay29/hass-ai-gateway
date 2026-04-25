@@ -99,17 +99,24 @@ VAD_SILENCE_DURATION: float  = float(os.getenv("VAD_SILENCE_DURATION", "1.0"))
 VAD_MAX_DURATION: float      = float(os.getenv("VAD_MAX_DURATION", "10.0"))
 VAD_MIN_DURATION: float      = 0.4     # ignore clips shorter than this
 
+# Follow-up turn — after the reply is spoken, listen again without wake word.
+# If the user starts speaking within FOLLOWUP_INITIAL_TIMEOUT seconds, capture
+# their utterance and send it as another turn. Otherwise return to wake-word mode.
+FOLLOWUP_ENABLED: bool           = os.getenv("FOLLOWUP_ENABLED", "true").lower() == "true"
+# Short window after the reply during which speech must start, otherwise we
+# return to wake-word mode. Keep this short (1–2 s) so silence ends the dialog.
+FOLLOWUP_INITIAL_TIMEOUT: float  = float(os.getenv("FOLLOWUP_INITIAL_TIMEOUT", "1.5"))
+# Number of consecutive loud chunks (CHUNK_MS each) required to count as real
+# speech onset. Filters out the tail of our own TTS playback and brief noise.
+FOLLOWUP_ONSET_CHUNKS: int       = int(os.getenv("FOLLOWUP_ONSET_CHUNKS", "3"))
+# Drain this many seconds of mic input right after playback to discard the
+# echo/tail of the assistant's own voice before listening.
+FOLLOWUP_DRAIN_SECONDS: float    = float(os.getenv("FOLLOWUP_DRAIN_SECONDS", "0.5"))
+
 # Detection threshold (0–1). Lower = more sensitive but more false positives.
 WAKE_THRESHOLD: float = float(os.getenv("WAKE_THRESHOLD", "0.5"))
 
-# Piper TTS model path — set this to use high-quality neural TTS.
-# Download a voice from: https://huggingface.co/rhasspy/piper-voices
-# Example: ~/voice/models/de_DE-thorsten-high.onnx
-# Leave empty to fall back to pyttsx3/espeak.
 TTS_MODEL: str = os.getenv("TTS_MODEL", "")
-
-# pyttsx3 fallback settings (only used when TTS_MODEL is not set)
-TTS_RATE: int = int(os.getenv("TTS_RATE", "165"))
 
 # Beep: two-note ascending chime played on wake detection (Alexa-style)
 BEEP_FREQ: int = 800    # first note (Hz)
@@ -249,18 +256,17 @@ def _set_volume() -> None:
 
 
 # ---------------------------------------------------------------------------
-# TTS — Piper binary (primary) or pyttsx3 (fallback)
+# TTS — Piper binary (local fallback, only used when gateway returns JSON)
 # ---------------------------------------------------------------------------
 
 # Path to the piper binary — lives in the same venv bin as this Python.
 _PIPER_BIN = str(Path(sys.executable).parent / "piper")
 
 _piper_sample_rate: int | None = None
-_pyttsx3_engine = None
 
 
 def _init_tts() -> None:
-    global _piper_sample_rate, _pyttsx3_engine
+    global _piper_sample_rate
 
     if TTS_MODEL and Path(TTS_MODEL).is_file():
         config_path = Path(TTS_MODEL).with_suffix(".onnx.json")
@@ -268,20 +274,10 @@ def _init_tts() -> None:
             config = json.load(f)
         _piper_sample_rate = config["audio"]["sample_rate"]
         logger.info(f"[TTS] Piper model: {TTS_MODEL} (sample_rate={_piper_sample_rate})")
+    elif TTS_MODEL:
+        logger.warning(f"[TTS] Piper model not found at '{TTS_MODEL}' — local TTS unavailable")
     else:
-        if TTS_MODEL:
-            logger.warning(f"[TTS] Piper model not found at '{TTS_MODEL}', falling back to pyttsx3")
-        else:
-            logger.info("[TTS] No TTS_MODEL set, using pyttsx3/espeak")
-
-        import pyttsx3
-        os.environ["AUDIODEV"] = ALSA_OUTPUT_DEVICE.replace("plughw:", "hw:")
-        _pyttsx3_engine = pyttsx3.init()
-        _pyttsx3_engine.setProperty("rate", TTS_RATE)
-        for voice in _pyttsx3_engine.getProperty("voices"):
-            if "german" in voice.name.lower() or "de" in voice.id.lower():
-                _pyttsx3_engine.setProperty("voice", voice.id)
-                break
+        logger.info("[TTS] No TTS_MODEL set — local TTS disabled (external TTS expected)")
 
 
 def _speak(text: str) -> None:
@@ -305,8 +301,7 @@ def _speak(text: str) -> None:
         p1.communicate(input=text.encode())
         p2.wait()
     else:
-        _pyttsx3_engine.say(text)
-        _pyttsx3_engine.runAndWait()
+        logger.warning(f"[TTS] No TTS available — cannot speak: {text!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -317,15 +312,25 @@ def _rms(chunk: np.ndarray) -> float:
     return float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2)))
 
 
-def _record_command(stream: sd.InputStream) -> bytes | None:
+def _record_command(
+    stream: sd.InputStream,
+    initial_timeout: float | None = None,
+    onset_chunks: int = 1,
+) -> bytes | None:
     """
     Record audio from the already-open wake word stream until VAD silence.
-    Returns raw 16-bit PCM bytes (mono, 16 kHz) or None if too short.
+    Returns raw 16-bit PCM bytes (mono, 16 kHz) or None if too short / no speech.
+
+    initial_timeout: if set and no real speech onset is detected within that many
+        seconds, return None immediately (used for follow-up turns).
+    onset_chunks: number of consecutive loud chunks required to count as speech
+        onset. >1 filters out brief noise / TTS tail.
     """
     logger.info("[Record] Listening for command…")
     frames: list[np.ndarray] = []
     silence_start: float | None = None
     speech_started = False
+    loud_streak = 0
     start_time = time.time()
 
     while True:
@@ -336,17 +341,25 @@ def _record_command(stream: sd.InputStream) -> bytes | None:
         elapsed = time.time() - start_time
 
         if DEBUG:
-            logger.info(f"[Debug] state=recording   rms={rms:.0f}/{VAD_SILENCE_THRESHOLD}  speech_started={speech_started}")
+            logger.info(f"[Debug] state=recording   rms={rms:.0f}/{VAD_SILENCE_THRESHOLD}  speech_started={speech_started}  streak={loud_streak}")
 
         if rms > VAD_SILENCE_THRESHOLD:
-            speech_started = True
+            loud_streak += 1
+            if loud_streak >= onset_chunks:
+                speech_started = True
             silence_start = None
-        elif speech_started:
-            if silence_start is None:
-                silence_start = time.time()
-            elif time.time() - silence_start >= VAD_SILENCE_DURATION:
-                logger.info("[Record] Silence detected — end of command")
-                break
+        else:
+            loud_streak = 0
+            if speech_started:
+                if silence_start is None:
+                    silence_start = time.time()
+                elif time.time() - silence_start >= VAD_SILENCE_DURATION:
+                    logger.info("[Record] Silence detected — end of command")
+                    break
+
+        if not speech_started and initial_timeout is not None and elapsed >= initial_timeout:
+            logger.info("[Record] No speech within follow-up timeout")
+            return None
 
         if elapsed >= VAD_MAX_DURATION:
             logger.info("[Record] Max duration reached")
@@ -453,24 +466,44 @@ def main() -> None:
                 logger.info(f"[WakeWord] Detected '{WAKE_WORD}' (score={score:.2f})")
                 oww.reset()
 
-                _led(*COLOR_RECORDING, LED_BRIGHTNESS)   # blau — recording
-                _beep()
+                initial_timeout: float | None = None
+                onset_chunks = 1
+                first_turn = True
+                while True:
+                    _led(*COLOR_RECORDING, LED_BRIGHTNESS)   # blau — recording
+                    _beep()
 
-                pcm = _record_command(stream)
-                _beep_end()
-                _led(*COLOR_PROCESSING, LED_BRIGHTNESS)  # orange — processing
-                if pcm is None:
+                    pcm = _record_command(stream, initial_timeout=initial_timeout, onset_chunks=onset_chunks)
+                    _beep_end()
+                    _led(*COLOR_PROCESSING, LED_BRIGHTNESS)  # orange — processing
+                    if pcm is None:
+                        _led_off()
+                        if first_turn:
+                            _speak("Entschuldigung, ich habe nichts gehört.")
+                        else:
+                            logger.info("[Followup] No follow-up speech — returning to wake word")
+                        break
+
+                    wav_reply, text_reply = _send_audio(_pcm_to_wav(pcm))
+                    _led(*COLOR_SPEAKING, LED_BRIGHTNESS)    # grün — speaking
+                    if wav_reply:
+                        _aplay(wav_reply)
+                    elif text_reply:
+                        _speak(text_reply)
                     _led_off()
-                    _speak("Entschuldigung, ich habe nichts gehört.")
-                    continue
 
-                wav_reply, text_reply = _send_audio(_pcm_to_wav(pcm))
-                _led(*COLOR_SPEAKING, LED_BRIGHTNESS)    # grün — speaking
-                if wav_reply:
-                    _aplay(wav_reply)
-                elif text_reply:
-                    _speak(text_reply)
-                _led_off()                               # done
+                    if not FOLLOWUP_ENABLED:
+                        break
+                    # Drain audio buffered during playback so the tail of our
+                    # own voice / echo doesn't fake a speech onset.
+                    try:
+                        drain_frames = max(CHUNK_FRAMES, int(SAMPLE_RATE * FOLLOWUP_DRAIN_SECONDS))
+                        stream.read(drain_frames)
+                    except Exception:
+                        pass
+                    initial_timeout = FOLLOWUP_INITIAL_TIMEOUT
+                    onset_chunks = max(1, FOLLOWUP_ONSET_CHUNKS)
+                    first_turn = False
 
 
 if __name__ == "__main__":

@@ -25,9 +25,5 @@ requests>=2.31
 # Auto-load .env file
 python-dotenv>=1.0
 
-# TTS — Piper (high quality neural, primary) + pyttsx3 (espeak fallback)
+# TTS — Piper local fallback (only used when gateway returns JSON, not WAV)
 piper-tts>=1.2.0
-pyttsx3>=2.90
-
-# Required by pyttsx3 on Linux/RPi (install system package first):
-#   sudo apt install espeak espeak-data libespeak-dev

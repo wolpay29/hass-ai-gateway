@@ -96,7 +96,8 @@ MAX_ACTIONS_PER_COMMAND = int(os.getenv("MAX_ACTIONS_PER_COMMAND", "0"))
 # RAG mode — replaces the entities.yaml -> LLM step when enabled.
 # Set RAG_ENABLED=false to keep the legacy behaviour completely unchanged.
 RAG_ENABLED = os.getenv("RAG_ENABLED", "false").lower() == "true"
-RAG_DB_PATH = os.getenv("RAG_DB_PATH", "data/rag/entities.sqlite")
+_RAG_DB_DEFAULT = str(Path(__file__).resolve().parent.parent / "data" / "rag" / "entities.sqlite")
+RAG_DB_PATH = os.getenv("RAG_DB_PATH", _RAG_DB_DEFAULT)
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "15"))
 RAG_KEYWORD_BOOST = float(os.getenv("RAG_KEYWORD_BOOST", "0.3"))
 

@@ -165,11 +165,10 @@ Two services must be running before starting the Pi client:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-pip python3-venv portaudio19-dev espeak espeak-data libespeak-dev
+sudo apt install -y python3-pip python3-venv portaudio19-dev
 ```
 
 - `portaudio19-dev` — required by sounddevice to talk to ALSA
-- `espeak` — only used as a fallback if no Piper model is configured
 
 ### 2. Copy Files to the Pi
 
@@ -269,6 +268,10 @@ EOF
 - `ALSA_INPUT_DEVICE`: ALSA device for mic input. Same format as `arecord -D`. Usually `plughw:1,0`.
 - `ALSA_OUTPUT_DEVICE`: ALSA device for all audio output (beep + TTS). Same format as `aplay -D`. Usually `plughw:1,0`.
 - `TTS_MODEL`: Only used as local fallback if the TTS server is unreachable. Leave empty since TTS now runs externally.
+- `FOLLOWUP_ENABLED`: `true` (default) — after a reply the Pi listens again without the wake word. `false` to always require the wake word.
+- `FOLLOWUP_INITIAL_TIMEOUT`: Seconds of silence after the reply before returning to wake-word mode (default `1.5`). Raise if you need more reaction time.
+- `FOLLOWUP_ONSET_CHUNKS`: Consecutive loud 80 ms chunks required to count as speech (default `3`, ≈ 240 ms). Raise to `4`–`5` if the assistant's own voice triggers a false start.
+- `FOLLOWUP_DRAIN_SECONDS`: Seconds of mic audio discarded immediately after playback (default `0.5`). Absorbs echo/TTS tail.
 
 The script loads `.env` automatically — just run it directly:
 
@@ -363,6 +366,9 @@ journalctl -u voice-client -f
 | No audio reply from Pi | TTS server not running or wrong URL | Check `TTS_EXTERNAL_URL` in gateway `.env` and verify TTS server is up |
 | Wake word never fires | Threshold too high or wrong wake word | Lower `WAKE_THRESHOLD` to `0.3`, or check `WAKE_WORD` spelling |
 | Records too long / cuts off early | VAD threshold wrong for room noise | Adjust `VAD_SILENCE_THRESHOLD` (default 500, raise in noisy rooms) |
+| Follow-up triggered by assistant's own voice | TTS echo exceeds RMS threshold | Raise `FOLLOWUP_ONSET_CHUNKS` to `4`–`5` or increase `FOLLOWUP_DRAIN_SECONDS` to `0.8` |
+| Follow-up ends too fast / no time to respond | `FOLLOWUP_INITIAL_TIMEOUT` too short | Raise to `2.5`–`3.0` |
+| Follow-up never ends after conversation | Background noise above `VAD_SILENCE_THRESHOLD` | Raise `VAD_SILENCE_THRESHOLD` or set `FOLLOWUP_ENABLED=false` |
 
 ---
 
