@@ -1,4 +1,5 @@
 """
+
 Raspberry Pi voice client — keyword detection + audio capture + gateway call + TTS.
 
 Flow:
@@ -13,6 +14,7 @@ Flow:
 Requirements: see requirements.txt
 Config: edit the CONFIG block below or set the matching env vars.
 """
+
 import io
 import json
 import os
@@ -33,9 +35,14 @@ import requests
 import sounddevice as sd
 from openwakeword.model import Model as WakeWordModel
 
+# ---------------------------------------------------------------------------
+# LED — ReSpeaker 2-Mic HAT (3x APA102 via spidev)
+# ---------------------------------------------------------------------------
 try:
-    import apa102
-    _LED_DEV = apa102.APA102(num_led=3)
+    import spidev
+    _LED_DEV = spidev.SpiDev()
+    _LED_DEV.open(0, 0)          # Bus 0, Device 0 (ReSpeaker 2Mic HAT)
+    _LED_DEV.max_speed_hz = 8000000
     _LED_AVAILABLE = True
 except Exception:
     _LED_DEV = None
@@ -55,9 +62,9 @@ GATEWAY_API_KEY: str = os.getenv("GATEWAY_API_KEY", "")
 DEVICE_ID: str       = os.getenv("DEVICE_ID",       "rpi-wohnzimmer")
 
 # ALSA device strings — use plughw:X,0 format for both input and output.
-# Same format as arecord/aplay commands. Default: plughw:1,0 (ReSpeaker HAT).
-ALSA_INPUT_DEVICE: str  = os.getenv("ALSA_INPUT_DEVICE",  "plughw:1,0")
-ALSA_OUTPUT_DEVICE: str = os.getenv("ALSA_OUTPUT_DEVICE", "plughw:1,0")
+# AUDIO_INPUT_DEVICE ist als Alias erlaubt, falls in der .env so benannt.
+ALSA_INPUT_DEVICE: str  = os.getenv("ALSA_INPUT_DEVICE") or os.getenv("AUDIO_INPUT_DEVICE", "plughw:1,0")
+ALSA_OUTPUT_DEVICE: str = os.getenv("ALSA_OUTPUT_DEVICE") or os.getenv("AUDIO_OUTPUT_DEVICE", "plughw:1,0")
 
 # Derive the sounddevice index from the ALSA card number in ALSA_INPUT_DEVICE.
 # sounddevice needs an integer index for its InputStream used in wake word detection.
@@ -121,22 +128,57 @@ _ALSA_CARD: str = _card_match.group(1) if _card_match else "1"
 
 
 # ---------------------------------------------------------------------------
-# LED — ReSpeaker 2-Mic HAT (3x APA102). No-ops if apa102 not available.
+# LED Farben aus .env laden
 # ---------------------------------------------------------------------------
 
-def _led(r: int, g: int, b: int, brightness: int = 15) -> None:
+def _parse_color(value: str) -> tuple[int, int, int]:
+    """Parst 'R,G,B' aus der .env zu einem (r, g, b)-Tuple."""
+    try:
+        parts = [int(p.strip()) for p in value.split(",")]
+        if len(parts) == 3:
+            return (max(0, min(255, parts[0])),
+                    max(0, min(255, parts[1])),
+                    max(0, min(255, parts[2])))
+    except Exception:
+        pass
+    return (0, 0, 0)
+
+
+LED_BRIGHTNESS: int = max(0, min(31, int(os.getenv("LED_BRIGHTNESS", "15"))))
+
+COLOR_RECORDING  = _parse_color(os.getenv("LED_COLOR_RECORDING",  "0,0,255"))
+COLOR_PROCESSING = _parse_color(os.getenv("LED_COLOR_PROCESSING", "255,165,0"))
+COLOR_SPEAKING   = _parse_color(os.getenv("LED_COLOR_SPEAKING",   "0,255,0"))
+COLOR_OFF        = _parse_color(os.getenv("LED_COLOR_OFF",        "0,0,0"))
+
+logger.info(f"[LED] Brightness={LED_BRIGHTNESS}, Recording={COLOR_RECORDING}, "
+            f"Processing={COLOR_PROCESSING}, Speaking={COLOR_SPEAKING}, Off={COLOR_OFF}")
+
+
+# ---------------------------------------------------------------------------
+# LED — ReSpeaker 2-Mic HAT (3x APA102). No-ops if spidev not available.
+# ---------------------------------------------------------------------------
+
+def _led(r: int, g: int, b: int, brightness: int = LED_BRIGHTNESS) -> None:
+    """Set all 3 APA102 LEDs to the same color.
+    APA102 frame: [0xE0 | brightness, B, G, R] per LED.
+    """
     if not _LED_AVAILABLE:
         return
-    for i in range(3):
-        _LED_DEV.set_pixel(i, r, g, b, brightness)
-    _LED_DEV.show()
+    # brightness: 0-31, top 3 bits must be 0b111 (0xE0)
+    br = 0xE0 | (brightness & 0x1F)
+    start = [0, 0, 0, 0]
+    pixel = [br, b & 0xFF, g & 0xFF, r & 0xFF]
+    end = [0xFF, 0xFF, 0xFF, 0xFF]
+    data = start + pixel * 3 + end
+    _LED_DEV.xfer2(data)
 
 
 def _led_off() -> None:
+    """Turn all LEDs off (uses COLOR_OFF from .env)."""
     if not _LED_AVAILABLE:
         return
-    _LED_DEV.clear_strip()
-    _LED_DEV.show()
+    _led(*COLOR_OFF, brightness=0)
 
 
 # ---------------------------------------------------------------------------
@@ -186,14 +228,24 @@ def _beep_end() -> None:
 def _set_volume() -> None:
     if not SPEAKER_VOLUME:
         return
-    controls = ["Playback", "Speaker", "Headphone"]
+
+    # 1. Die "Leitungen" (Mixer) physisch einschalten (MUSS auf 'on' sein)
+    # Ohne das bleibt der Lautsprecher stumm, egal wie laut man stellt.
+    subprocess.run(["amixer", "-c", _ALSA_CARD, "sset", "Left Output Mixer PCM", "on"], capture_output=True)
+    subprocess.run(["amixer", "-c", _ALSA_CARD, "sset", "Right Output Mixer PCM", "on"], capture_output=True)
+
+    # 2. Digitales Playback immer auf 100% lassen (verhindert Rauschen/Stille)
+    subprocess.run(["amixer", "-c", _ALSA_CARD, "sset", "Playback", "100%"], capture_output=True)
+
+    # 3. Die eigentliche Lautstärke nur an den Endstufen regeln
+    controls = ["Speaker", "Headphone"]
     for ctrl in controls:
         result = subprocess.run(
             ["amixer", "-c", _ALSA_CARD, "sset", ctrl, SPEAKER_VOLUME],
             capture_output=True,
         )
         if result.returncode == 0:
-            logger.info(f"[Volume] {ctrl} → {SPEAKER_VOLUME}")
+            logger.info(f"[Volume] {ctrl} set to {SPEAKER_VOLUME}")
 
 
 # ---------------------------------------------------------------------------
@@ -205,19 +257,6 @@ _PIPER_BIN = str(Path(sys.executable).parent / "piper")
 
 _piper_sample_rate: int | None = None
 _pyttsx3_engine = None
-
-
-def _set_volume() -> None:
-    if not SPEAKER_VOLUME:
-        return
-    controls = ["Playback", "Speaker", "Headphone"]
-    for ctrl in controls:
-        result = subprocess.run(
-            ["amixer", "-c", _ALSA_CARD, "sset", ctrl, SPEAKER_VOLUME],
-            capture_output=True,
-        )
-        if result.returncode == 0:
-            logger.info(f"[Volume] {ctrl} → {SPEAKER_VOLUME}")
 
 
 def _init_tts() -> None:
@@ -383,6 +422,9 @@ def _send_audio(wav_bytes: bytes) -> tuple[bytes | None, str]:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    # LEDs beim Start ausschalten
+    _led_off()
+
     _set_volume()
     _init_tts()
 
@@ -411,24 +453,24 @@ def main() -> None:
                 logger.info(f"[WakeWord] Detected '{WAKE_WORD}' (score={score:.2f})")
                 oww.reset()
 
-                _led(0, 0, 255)          # blue — recording
+                _led(*COLOR_RECORDING, LED_BRIGHTNESS)   # blau — recording
                 _beep()
 
                 pcm = _record_command(stream)
                 _beep_end()
-                _led(255, 165, 0)        # orange — processing
+                _led(*COLOR_PROCESSING, LED_BRIGHTNESS)  # orange — processing
                 if pcm is None:
                     _led_off()
                     _speak("Entschuldigung, ich habe nichts gehört.")
                     continue
 
                 wav_reply, text_reply = _send_audio(_pcm_to_wav(pcm))
-                _led(0, 255, 0)          # green — speaking
+                _led(*COLOR_SPEAKING, LED_BRIGHTNESS)    # grün — speaking
                 if wav_reply:
                     _aplay(wav_reply)
                 elif text_reply:
                     _speak(text_reply)
-                _led_off()               # done
+                _led_off()                               # done
 
 
 if __name__ == "__main__":
