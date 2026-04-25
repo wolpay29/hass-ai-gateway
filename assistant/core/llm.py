@@ -215,6 +215,26 @@ def append_execution_summary(chat_id: int, summary: str) -> None:
             return
 
 
+def append_clarification_turn(chat_id: int, transcript: str, question: str) -> None:
+    """Persist a clarification round-trip in history so the follow-up turn keeps
+    the original action intent (e.g. "Licht abschalten" → "Welches?" → "Bad UG").
+
+    Without this, the ambiguous transcript and the clarification question are
+    dropped, and the next parser call only sees the entity-naming reply.
+    """
+    if LLM_HISTORY_SIZE <= 0 or chat_id == 0 or not transcript:
+        return
+    history = _history.get(chat_id, [])
+    history.append({"role": "user", "content": transcript})
+    if HISTORY_INCLUDE_ASSISTANT and question:
+        history.append({"role": "assistant", "content": question})
+    max_entries = LLM_HISTORY_SIZE * (2 if HISTORY_INCLUDE_ASSISTANT else 1)
+    if len(history) > max_entries:
+        history = history[-max_entries:]
+    _history[chat_id] = history
+    logger.info(f"[LLM] Clarification-Turn fuer chat {chat_id} gespeichert ({len(history)} Eintraege)")
+
+
 def smalltalk_reply(transcript: str, chat_id: int = 0) -> str | None:
     """Free-form chat reply for non-command intents (smalltalk / clarification).
 

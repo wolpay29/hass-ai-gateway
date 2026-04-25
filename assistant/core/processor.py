@@ -42,6 +42,7 @@ from core.llm import (
     get_recent_user_messages,
     get_recent_assistant_replies,
     append_execution_summary,
+    append_clarification_turn,
     get_history_snapshot,
 )
 from core.llm_lmstudio import fallback_via_mcp
@@ -224,6 +225,10 @@ def process_transcript(transcript: str, chat_id: int = 0) -> dict:
 
     if command.get("_clarify"):
         result["reply"] = command["_clarify"]
+        # Originaltranscript + Rueckfrage in die History schreiben, damit der
+        # naechste Turn (Antwort auf die Rueckfrage) den urspruenglichen
+        # Action-Intent ("abschalten" etc.) noch sieht.
+        append_clarification_turn(chat_id, transcript, command["_clarify"])
         return result
 
     reply = command.get("reply", "")
