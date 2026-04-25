@@ -26,6 +26,7 @@ from core.config import (
     FALLBACK_REST_DOMAINS,
     FALLBACK_REST_MAX_ENTITIES,
     RAG_ENABLED,
+    RAG_QUERY_REWRITE,
     HISTORY_INCLUDE_ASSISTANT,
     HISTORY_APPEND_EXECUTIONS,
 )
@@ -90,7 +91,10 @@ def _resolve_command(transcript: str, chat_id: int) -> dict | None:
             from core.rag.index import query as rag_query
 
             embed_query = transcript
-            if len(transcript.split()) <= _RAG_ENRICH_MAX_WORDS:
+            if RAG_QUERY_REWRITE:
+                from core.rag.rewriter import rewrite_query
+                embed_query = rewrite_query(transcript, chat_id=chat_id)
+            elif len(transcript.split()) <= _RAG_ENRICH_MAX_WORDS:
                 context: list[str] = [m for m in get_recent_user_messages(chat_id) if m != transcript]
                 if HISTORY_INCLUDE_ASSISTANT:
                     context.extend(get_recent_assistant_replies(chat_id))

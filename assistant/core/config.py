@@ -109,6 +109,16 @@ RAG_EMBED_TIMEOUT = int(os.getenv("RAG_EMBED_TIMEOUT", str(LMSTUDIO_TIMEOUT)))
 RAG_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", "text-embedding-nomic-embed-text-v2-moe")
 RAG_EMBED_DIM = int(os.getenv("RAG_EMBED_DIM", "768"))
 
+# Query rewrite — runs an extra (small) LLM call BEFORE the RAG search to fix
+# typos / STT errors and resolve pronouns from history. Always-on when enabled.
+# Each *_REWRITE_* setting falls back to the main LMSTUDIO_* equivalent if empty.
+RAG_QUERY_REWRITE = os.getenv("RAG_QUERY_REWRITE", "false").lower() == "true"
+RAG_REWRITE_LLM_URL = os.getenv("RAG_REWRITE_LLM_URL", "") or LMSTUDIO_URL
+RAG_REWRITE_LLM_API_KEY = os.getenv("RAG_REWRITE_LLM_API_KEY", "") or LMSTUDIO_API_KEY
+RAG_REWRITE_MODEL = os.getenv("RAG_REWRITE_MODEL", "") or LMSTUDIO_MODEL
+RAG_REWRITE_TIMEOUT = int(os.getenv("RAG_REWRITE_TIMEOUT", str(LMSTUDIO_TIMEOUT)))
+RAG_REWRITE_TEMPERATURE = float(os.getenv("RAG_REWRITE_TEMPERATURE", "0.1"))
+
 # UNIVERSAL (both RAG modes): if true, assistant turns are stored in history so
 # the LLM sees its own prior replies on the next turn. In RAG mode those replies
 # are additionally used to enrich the embed query for short follow-ups. If false,

@@ -90,7 +90,31 @@ fallback_rest: |-
   "domain" ist der Teil vor dem Punkt in der entity_id.
   "reply" ist eine kurze freundliche Antwort auf Deutsch.
 
-# 4) State-Formatter (zweiter LLM-Call): Live-Daten -> natuerlicher Satz
+# 4) Query-Rewriter: normalisiert Nutzeranfragen vor der RAG-Suche
+# Platzhalter: {history} (zeilenweise, aelteste zuerst; "(leer)" wenn kein Verlauf)
+#              {transcript} (die aktuelle Anfrage)
+query_rewriter: |-
+  Du normalisierst Smart-Home-Befehle fuer eine semantische Geraetesuche.
+
+  Bisheriger Gespraechsverlauf (aelteste zuerst, nur Kontext):
+  {history}
+
+  Aktuelle Anfrage des Nutzers:
+  {transcript}
+
+  Aufgabe:
+  - Gib EINEN kurzen, klaren deutschen Suchsatz zurueck, der die aktuelle Anfrage
+    moeglichst praezise beschreibt.
+  - Bewahre die urspruengliche Bedeutung exakt — erfinde keine neuen Geraete,
+    Raeume oder Aktionen.
+  - Korrigiere offensichtliche Tippfehler oder Spracherkennungsfehler
+    (z.B. "lciht" -> "licht", "wonzimer" -> "wohnzimmer").
+  - Loese Pronomen oder Bezuege ("das", "wieder aus", "auch") anhand des
+    Verlaufs auf, falls eindeutig. Wenn unklar: Anfrage unveraendert lassen.
+  - Keine Erklaerung, kein JSON, keine Anfuehrungszeichen, keine Aktionen —
+    NUR der normalisierte Suchsatz in EINER Zeile.
+
+# 5) State-Formatter (zweiter LLM-Call): Live-Daten -> natuerlicher Satz
 state_formatter: |-
   Smart Home Assistent. Antworte NUR mit JSON, kein anderer Text.
 
