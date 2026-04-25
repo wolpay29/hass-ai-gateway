@@ -33,6 +33,14 @@ import requests
 import sounddevice as sd
 from openwakeword.model import Model as WakeWordModel
 
+try:
+    import apa102
+    _LED_DEV = apa102.APA102(num_led=3)
+    _LED_AVAILABLE = True
+except Exception:
+    _LED_DEV = None
+    _LED_AVAILABLE = False
+
 logging.basicConfig(
     format="%(asctime)s [rpi-client] %(levelname)s %(message)s",
     level=logging.INFO,
@@ -96,9 +104,10 @@ TTS_MODEL: str = os.getenv("TTS_MODEL", "")
 # pyttsx3 fallback settings (only used when TTS_MODEL is not set)
 TTS_RATE: int = int(os.getenv("TTS_RATE", "165"))
 
-# Beep: frequency (Hz) and duration (ms) played on wake detection
-BEEP_FREQ: int = 520
-BEEP_MS: int   = 200
+# Beep: two-note ascending chime played on wake detection (Alexa-style)
+BEEP_FREQ: int = 800    # first note (Hz)
+BEEP_FREQ2: int = 1200  # second note (Hz)
+BEEP_MS: int   = 130    # duration of each note (ms)
 
 # Debug: set DEBUG=true to print wake word score and RMS on every audio chunk.
 # Useful for tuning WAKE_THRESHOLD and VAD_SILENCE_THRESHOLD.
@@ -109,6 +118,25 @@ SPEAKER_VOLUME: str = os.getenv("SPEAKER_VOLUME", "100%")
 # ALSA card number derived from ALSA_OUTPUT_DEVICE (e.g. plughw:1,0 → card 1)
 _card_match = re.search(r":(\d+),", ALSA_OUTPUT_DEVICE)
 _ALSA_CARD: str = _card_match.group(1) if _card_match else "1"
+
+
+# ---------------------------------------------------------------------------
+# LED — ReSpeaker 2-Mic HAT (3x APA102). No-ops if apa102 not available.
+# ---------------------------------------------------------------------------
+
+def _led(r: int, g: int, b: int, brightness: int = 15) -> None:
+    if not _LED_AVAILABLE:
+        return
+    for i in range(3):
+        _LED_DEV.set_pixel(i, r, g, b, brightness)
+    _LED_DEV.show()
+
+
+def _led_off() -> None:
+    if not _LED_AVAILABLE:
+        return
+    _LED_DEV.clear_strip()
+    _LED_DEV.show()
 
 
 # ---------------------------------------------------------------------------
@@ -124,23 +152,48 @@ def _aplay(wav_bytes: bytes) -> None:
     )
 
 
-def _beep() -> None:
-    n = int(SAMPLE_RATE * BEEP_MS / 1000)
-    t = np.linspace(0, BEEP_MS / 1000, n, False)
-    tone = np.sin(2 * np.pi * BEEP_FREQ * t)
-    # soft fade-in / fade-out over 20% of the tone length to avoid clicks
-    fade = int(n * 0.2)
+def _make_tone(freq: int, ms: int, volume: float = 0.25) -> np.ndarray:
+    n = int(SAMPLE_RATE * ms / 1000)
+    t = np.linspace(0, ms / 1000, n, False)
+    tone = np.sin(2 * np.pi * freq * t)
+    fade = int(n * 0.25)
     envelope = np.ones(n)
     envelope[:fade] = np.linspace(0, 1, fade)
     envelope[-fade:] = np.linspace(1, 0, fade)
-    tone = (tone * envelope * 0.2 * 32767).astype(np.int16)
+    return (tone * envelope * volume * 32767).astype(np.int16)
+
+
+def _play_chime(first: int, second: int) -> None:
+    gap = np.zeros(int(SAMPLE_RATE * 0.04), dtype=np.int16)
+    chime = np.concatenate([_make_tone(first, BEEP_MS), gap, _make_tone(second, BEEP_MS)])
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wf:
         wf.setnchannels(1)
         wf.setsampwidth(2)
         wf.setframerate(SAMPLE_RATE)
-        wf.writeframes(tone.tobytes())
+        wf.writeframes(chime.tobytes())
     _aplay(buf.getvalue())
+
+
+def _beep() -> None:
+    _play_chime(BEEP_FREQ, BEEP_FREQ2)  # ascending — wake detected
+
+
+def _beep_end() -> None:
+    _play_chime(BEEP_FREQ2, BEEP_FREQ)  # descending — recording stopped
+
+
+def _set_volume() -> None:
+    if not SPEAKER_VOLUME:
+        return
+    controls = ["Playback", "Speaker", "Headphone"]
+    for ctrl in controls:
+        result = subprocess.run(
+            ["amixer", "-c", _ALSA_CARD, "sset", ctrl, SPEAKER_VOLUME],
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            logger.info(f"[Volume] {ctrl} → {SPEAKER_VOLUME}")
 
 
 # ---------------------------------------------------------------------------
@@ -330,6 +383,7 @@ def _send_audio(wav_bytes: bytes) -> tuple[bytes | None, str]:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    _set_volume()
     _init_tts()
 
     logger.info(f"[Init] Loading wake word model: '{WAKE_WORD}'")
@@ -357,18 +411,24 @@ def main() -> None:
                 logger.info(f"[WakeWord] Detected '{WAKE_WORD}' (score={score:.2f})")
                 oww.reset()
 
+                _led(0, 0, 255)          # blue — recording
                 _beep()
 
                 pcm = _record_command(stream)
+                _beep_end()
+                _led(255, 165, 0)        # orange — processing
                 if pcm is None:
+                    _led_off()
                     _speak("Entschuldigung, ich habe nichts gehört.")
                     continue
 
                 wav_reply, text_reply = _send_audio(_pcm_to_wav(pcm))
+                _led(0, 255, 0)          # green — speaking
                 if wav_reply:
                     _aplay(wav_reply)
                 elif text_reply:
                     _speak(text_reply)
+                _led_off()               # done
 
 
 if __name__ == "__main__":

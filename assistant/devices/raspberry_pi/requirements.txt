@@ -19,6 +19,10 @@ tqdm>=4.0,<5
 sounddevice>=0.4.6
 numpy>=1.24
 
+# ReSpeaker 2-Mic HAT LEDs (APA102 via SPI)
+# Enable SPI first: sudo raspi-config → Interface Options → SPI → Enable
+apa102-pi>=1.0.0
+
 # HTTP client
 requests>=2.31
 
