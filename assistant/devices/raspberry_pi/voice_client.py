@@ -98,6 +98,8 @@ VAD_SILENCE_THRESHOLD: float = float(os.getenv("VAD_SILENCE_THRESHOLD", "500"))
 VAD_SILENCE_DURATION: float  = float(os.getenv("VAD_SILENCE_DURATION", "1.0"))
 VAD_MAX_DURATION: float      = float(os.getenv("VAD_MAX_DURATION", "10.0"))
 VAD_MIN_DURATION: float      = 0.4     # ignore clips shorter than this
+# Seconds after the wake word to wait for speech onset before cancelling.
+VAD_INITIAL_TIMEOUT: float   = float(os.getenv("VAD_INITIAL_TIMEOUT", "5.0"))
 
 # Follow-up turn — after the reply is spoken, listen again without wake word.
 # If the user starts speaking within FOLLOWUP_INITIAL_TIMEOUT seconds, capture
@@ -466,7 +468,7 @@ def main() -> None:
                 logger.info(f"[WakeWord] Detected '{WAKE_WORD}' (score={score:.2f})")
                 oww.reset()
 
-                initial_timeout: float | None = None
+                initial_timeout: float | None = VAD_INITIAL_TIMEOUT
                 onset_chunks = 1
                 first_turn = True
                 while True:
@@ -479,7 +481,7 @@ def main() -> None:
                     if pcm is None:
                         _led_off()
                         if first_turn:
-                            _speak("Entschuldigung, ich habe nichts gehört.")
+                            logger.info("[Record] No speech after wake word — returning to wake word")
                         else:
                             logger.info("[Followup] No follow-up speech — returning to wake word")
                         break

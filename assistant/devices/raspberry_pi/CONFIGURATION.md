@@ -320,6 +320,8 @@ If the gateway returns `{"error":"no_speech"}` the WAV was silent — re-run ami
 
 So the client starts automatically on boot:
 
+> **Important:** systemd's `EnvironmentFile` does not strip inline comments. Make sure your `.env` on the Pi has no comments on the same line as a value (e.g. `KEY=value # comment` breaks it). Put comments on their own line or remove them entirely.
+
 ```bash
 sudo nano /etc/systemd/system/voice-client.service
 ```
