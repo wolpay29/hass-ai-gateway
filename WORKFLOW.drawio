@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-04-25T00:00:00.000Z" agent="claude" version="24.0.0">
+  <diagram name="Smart Home Workflow" id="workflow">
+    <mxGraphModel dx="2400" dy="1600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="3200" pageHeight="4400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ================== TITLE ================== -->
+        <mxCell id="title" value="SMART HOME ASSISTANT — COMPLETE WORKFLOW&#10;every input path → core.processor → HA actions / replies" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="900" y="20" width="1400" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ================== LEGEND ================== -->
+        <mxCell id="legendBox" value="LEGEND" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666;fontStyle=1;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="100" width="240" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="legInput" value="Input / transport" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="60" y="140" width="200" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="legProc" value="Process step" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="60" y="170" width="200" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="legLLM" value="LLM call" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="60" y="200" width="200" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="legHA" value="Home Assistant call" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="60" y="230" width="200" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="legDec" value="Decision" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="60" y="260" width="200" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="legOut" value="Output / result" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="290" width="200" height="24" as="geometry" />
+        </mxCell>
+
+        <!-- ================== INPUT LAYER ================== -->
+        <mxCell id="inputLane" value="1. INPUT LAYER" style="swimlane;startSize=30;fillColor=none;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="100" width="2400" height="220" as="geometry" />
+        </mxCell>
+
+        <mxCell id="inTgText" value="Telegram TEXT message&#10;&#10;handlers.handle_text" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="inputLane">
+          <mxGeometry x="80" y="60" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="inTgVoice" value="Telegram VOICE message&#10;&#10;handlers.handle_voice&#10;downloads .ogg" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="inputLane">
+          <mxGeometry x="380" y="60" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="inRpiAudio" value="RPi / ESP32 AUDIO&#10;POST /audio (multipart)&#10;&#10;voice_gateway.audio_endpoint" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="inputLane">
+          <mxGeometry x="680" y="60" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="inRpiText" value="RPi / ESP32 TEXT&#10;POST /text (JSON)&#10;&#10;voice_gateway.text_endpoint" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="inputLane">
+          <mxGeometry x="1000" y="60" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="inAuth" value="Gateway auth&#10;X-Api-Key == GATEWAY_API_KEY&#10;(empty = no auth)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="inputLane">
+          <mxGeometry x="1310" y="60" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="inDevId" value="device_id → chat_id&#10;_device_to_chat_id()&#10;numeric → reuse (shares history)&#10;other → hash() % 1e9 (isolated)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="inputLane">
+          <mxGeometry x="1610" y="60" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="inTgChat" value="Telegram chat_id&#10;(used directly as history key)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="inputLane">
+          <mxGeometry x="160" y="160" width="380" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ================== STT LAYER ================== -->
+        <mxCell id="sttLane" value="2. SPEECH-TO-TEXT (voice paths only)" style="swimlane;startSize=30;fillColor=none;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="340" width="2400" height="170" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sttBox" value="core.voice.transcribe_audio(path)&#10;&#10;WHISPER_BACKEND ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="sttLane">
+          <mxGeometry x="500" y="50" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="sttLocal" value="local — faster-whisper&#10;WHISPER_MODEL · DEVICE&#10;COMPUTE_TYPE · THREADS&#10;BEAM_SIZE · LANGUAGE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="sttLane">
+          <mxGeometry x="820" y="40" width="260" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="sttExt" value="external — HTTP API&#10;WHISPER_EXTERNAL_URL&#10;WHISPER_EXTERNAL_MODEL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="sttLane">
+          <mxGeometry x="1120" y="40" width="260" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="sttEmpty" value="empty transcript&#10;Telegram: '❌ nicht verstanden'&#10;Gateway: error='no_speech'" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;dashed=1;fontSize=11;" vertex="1" parent="sttLane">
+          <mxGeometry x="1430" y="40" width="260" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="sttDone" value="transcript : str&#10;chat_id : int" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=12;" vertex="1" parent="sttLane">
+          <mxGeometry x="1740" y="60" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- ================== CORE BRAIN ================== -->
+        <mxCell id="coreLane" value="3. CORE BRAIN — core.processor.process_transcript(transcript, chat_id)" style="swimlane;startSize=30;fillColor=none;strokeColor=#b85450;fontSize=14;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="540" width="2400" height="2200" as="geometry" />
+        </mxCell>
+
+        <!-- 3.1 history snapshot -->
+        <mxCell id="histSnap" value="get_history_snapshot(chat_id)&#10;(captures pre-call history for REST fallback&#10;so it doesn't see the just-added turn)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="60" y="60" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- 3.2 build_embed_query decision -->
+        <mxCell id="bqDec" value="_build_embed_query()&#10;&#10;RAG_QUERY_REWRITE ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontStyle=1;" vertex="1" parent="coreLane">
+          <mxGeometry x="900" y="50" width="280" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- branch RIGHT: rewriter -->
+        <mxCell id="rwCall" value="core.rag.rewriter.rewrite_query()&#10;&#10;LLM call → JSON&#10;{intent, query}&#10;&#10;Endpoint: RAG_REWRITE_LLM_URL&#10;Model:    RAG_REWRITE_MODEL&#10;Key:      RAG_REWRITE_LLM_API_KEY&#10;(each falls back to LMSTUDIO_*)&#10;Temp:     RAG_REWRITE_TEMPERATURE&#10;Timeout:  RAG_REWRITE_TIMEOUT&#10;Prompt:   prompts.yaml::query_rewriter&#10;History:  built from LLM_HISTORY_SIZE&#10;          + HISTORY_INCLUDE_ASSISTANT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="1300" y="40" width="320" height="240" as="geometry" />
+        </mxCell>
+
+        <!-- intent decision -->
+        <mxCell id="intentDec" value="intent ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontStyle=1;" vertex="1" parent="coreLane">
+          <mxGeometry x="1700" y="80" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- smalltalk path -->
+        <mxCell id="smallCall" value="core.llm.smalltalk_reply()&#10;&#10;LMSTUDIO_URL · LMSTUDIO_MODEL&#10;LMSTUDIO_TEMPERATURE&#10;LLM_HISTORY_SIZE · HISTORY_INCLUDE_ASSISTANT&#10;Prompt: prompts.yaml::smalltalk&#10;(free German prose, no JSON, no actions)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="2000" y="40" width="340" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="smallResult" value="result.reply = smalltalk text&#10;result.actions_executed = []&#10;error = null (or 'smalltalk_failed')&#10;→ skip RAG · skip parser · skip HA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="2000" y="220" width="340" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- branch LEFT: legacy enrichment -->
+        <mxCell id="enrichBox" value="legacy enrichment&#10;&#10;if len(transcript.split()) ≤ 5:&#10;  embed_query = recent_history + ' → ' + transcript&#10;else:&#10;  embed_query = transcript&#10;&#10;intent = 'command'  (always)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="500" y="200" width="320" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- merge: embed_query + intent==command -->
+        <mxCell id="merge1" value="embed_query : str&#10;intent : 'command'" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=12;" vertex="1" parent="coreLane">
+          <mxGeometry x="900" y="380" width="280" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- 3.3 RAG_ENABLED decision -->
+        <mxCell id="ragDec" value="RAG_ENABLED ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontStyle=1;" vertex="1" parent="coreLane">
+          <mxGeometry x="900" y="490" width="280" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- LEFT: legacy parse_command -->
+        <mxCell id="legacyParse" value="core.llm.parse_command()&#10;&#10;LMSTUDIO_URL · LMSTUDIO_MODEL&#10;LMSTUDIO_TEMPERATURE · LMSTUDIO_NO_THINK&#10;LMSTUDIO_TIMEOUT · LMSTUDIO_API_KEY&#10;Prompt: prompts.yaml::primary_parser&#10;Catalog: core/entities.yaml (curated)&#10;LLM_HISTORY_SIZE history injected&#10;Validates entity_id against entities.yaml&#10;Drops hallucinated IDs&#10;MAX_ACTIONS_PER_COMMAND cap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="60" y="640" width="340" height="220" as="geometry" />
+        </mxCell>
+
+        <!-- RIGHT: RAG path -->
+        <mxCell id="ragQuery" value="core.rag.index.query(embed_query)&#10;&#10;1) embeddings.embed_one(embed_query)&#10;   → RAG_EMBED_URL · RAG_EMBED_MODEL&#10;     RAG_EMBED_API_KEY · RAG_EMBED_TIMEOUT&#10;     dim = RAG_EMBED_DIM&#10;2) sqlite-vec KNN, k = RAG_TOP_K&#10;   DB: RAG_DB_PATH&#10;3) keyword boost: distance *= (1 - RAG_KEYWORD_BOOST)&#10;   for entities whose curated keywords appear in transcript&#10;4) returns top candidates with distances" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="1300" y="640" width="380" height="220" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ragEmpty" value="No candidates&#10;→ fall back to legacy parse_command" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;dashed=1;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="1730" y="640" width="280" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- confidence check -->
+        <mxCell id="confDec" value="_build_clarification()&#10;&#10;always logs:&#10;top1 d1 / top2 d2 / gap / threshold / same_domain&#10;&#10;gap &lt; RAG_CLARIFY_GAP_THRESHOLD&#10;and (RAG_CLARIFY_SAME_DOMAIN_ONLY → same domain) ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="1300" y="900" width="380" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="clarify" value="reply = 'Meinst du X oder Y?'&#10;actions = []&#10;parser is SKIPPED&#10;(returns special {_clarify} dict)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="1730" y="920" width="280" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ragParse" value="core.llm.parse_command_rag()&#10;&#10;LMSTUDIO_URL · LMSTUDIO_MODEL&#10;LMSTUDIO_TEMPERATURE · LMSTUDIO_NO_THINK&#10;LMSTUDIO_TIMEOUT · LMSTUDIO_API_KEY&#10;Prompt: prompts.yaml::rag_parser&#10;Candidates injected with friendly_name / actions / meta&#10;LLM_HISTORY_SIZE history injected&#10;Validates entity_id against candidate set&#10;needs_fallback always allowed&#10;MAX_ACTIONS_PER_COMMAND cap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="1300" y="1100" width="380" height="220" as="geometry" />
+        </mxCell>
+
+        <!-- merge into command -->
+        <mxCell id="cmdMerge" value="command : { reply, actions[] }" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=13;" vertex="1" parent="coreLane">
+          <mxGeometry x="780" y="1380" width="380" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- command branch decision -->
+        <mxCell id="cmdDec" value="actions ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontStyle=1;" vertex="1" parent="coreLane">
+          <mxGeometry x="850" y="1480" width="240" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- needs_fallback path -->
+        <mxCell id="fbDec" value="FALLBACK_MODE ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;fontStyle=1;" vertex="1" parent="coreLane">
+          <mxGeometry x="200" y="1640" width="220" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="fbREST" value="parse_command_with_states()&#10;&#10;core.ha.get_all_states()&#10;FALLBACK_REST_DOMAINS (filter)&#10;FALLBACK_REST_MAX_ENTITIES (cap)&#10;Prompt: prompts.yaml::fallback_rest&#10;Uses prior_history snapshot&#10;result.fallback_used = 'rest'" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="60" y="1800" width="320" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="fbMCP" value="core.llm_lmstudio.fallback_via_mcp()&#10;&#10;LM Studio + HA MCP server&#10;LMSTUDIO_CONTEXT_LENGTH&#10;LMSTUDIO_MCP_ALLOWED_TOOLS (whitelist)&#10;LMSTUDIO_API_KEY (mandatory here)&#10;result.reply = MCP text&#10;result.fallback_used = 'mcp'&#10;errors → error='mcp_failed'" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="420" y="1800" width="320" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="fbErr" value="error =&#10;needs_fallback_no_mode  (Mode 0)&#10;or&#10;fallback_no_match  (REST returned nothing)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;dashed=1;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="60" y="2010" width="320" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- execute actions path -->
+        <mxCell id="execLoop" value="EXECUTE ACTIONS  (for each action in command.actions)&#10;&#10;safety re-check MAX_ACTIONS_PER_COMMAND&#10;ignored items appended to result.actions_ignored&#10;&#10;if action == 'get_state':&#10;    core.ha.get_state(entity_id)&#10;    → push to state_queries[]&#10;else:&#10;    core.ha.call_service(domain, action, entity_id)&#10;    → record success / failure&#10;append to result.actions_executed[]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="1340" y="1640" width="380" height="240" as="geometry" />
+        </mxCell>
+
+        <!-- history append -->
+        <mxCell id="histAppend" value="HISTORY_APPEND_EXECUTIONS=true ?&#10;&#10;append_execution_summary(chat_id):&#10;'ausgefuehrt: turn_on -&gt; light.licht_paul, ...'&#10;appended to last assistant turn so the LLM sees&#10;what actually ran on the next turn." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="1340" y="1900" width="380" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- state formatter -->
+        <mxCell id="stateDec" value="state_queries[] non-empty ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;fontStyle=1;" vertex="1" parent="coreLane">
+          <mxGeometry x="1810" y="1670" width="320" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stateFmt" value="core.llm.format_state_reply()&#10;&#10;2nd LLM call&#10;Prompt: prompts.yaml::state_formatter&#10;Turns raw HA values + transcript&#10;into one short German sentence.&#10;result.reply ← formatted output" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;fontSize=11;" vertex="1" parent="coreLane">
+          <mxGeometry x="1810" y="1820" width="320" height="160" as="geometry" />
+        </mxCell>
+
+        <!-- final result dict -->
+        <mxCell id="finalResult" value="result : dict&#10;&#10;{ transcript, reply,&#10;  actions_executed[], actions_ignored[],&#10;  error, fallback_used }" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=12;" vertex="1" parent="coreLane">
+          <mxGeometry x="900" y="2080" width="400" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- ================== OUTPUT LAYER ================== -->
+        <mxCell id="outLane" value="4. OUTPUT LAYER" style="swimlane;startSize=30;fillColor=none;strokeColor=#9673a6;fontSize=14;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="2780" width="2400" height="600" as="geometry" />
+        </mxCell>
+
+        <mxCell id="outDec" value="caller ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontStyle=1;" vertex="1" parent="outLane">
+          <mxGeometry x="1000" y="60" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tgFmt" value="handlers._format_reply(result)&#10;&#10;'no_match' + reply → '💬 reply'&#10;known error → German message from _ERROR_MESSAGES&#10;else: reply text + ✅/❌ per executed action&#10;       + ⚠️ per ignored (limit) action&#10;Sent via update.message.reply_text(parse_mode='Markdown')&#10;Falls back to plain text if Markdown fails." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;fontSize=11;" vertex="1" parent="outLane">
+          <mxGeometry x="100" y="200" width="500" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tgOut" value="📤 Telegram message" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=12;" vertex="1" parent="outLane">
+          <mxGeometry x="220" y="420" width="260" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="gwTtsDec" value="tts == true&#10;AND TTS_EXTERNAL_URL set ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="outLane">
+          <mxGeometry x="1000" y="200" width="280" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="gwWav" value="_tts_to_wav()&#10;POST → tts_server&#10;TTS_EXTERNAL_VOICE&#10;&#10;Response: audio/wav" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;fontSize=11;" vertex="1" parent="outLane">
+          <mxGeometry x="800" y="350" width="240" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="gwJson" value="JSONResponse(result)&#10;&#10;Used when:&#10;  tts == false&#10;  TTS not configured&#10;  TTS call failed (graceful fallback)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;fontSize=11;" vertex="1" parent="outLane">
+          <mxGeometry x="1100" y="350" width="280" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="gwPush" value="GATEWAY_TELEGRAM_PUSH=true ?&#10;&#10;_telegram_push() — sends formatted&#10;receipt to MY_CHAT_ID via BOT_TOKEN.&#10;Includes transcript, reply, ✅/❌ actions, error.&#10;Runs in addition to the device response." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;fontSize=11;" vertex="1" parent="outLane">
+          <mxGeometry x="1430" y="200" width="380" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rpiOut" value="📤 Device response&#10;(audio/wav OR JSON)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=12;" vertex="1" parent="outLane">
+          <mxGeometry x="1020" y="510" width="280" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tgPushOut" value="📤 Telegram receipt to MY_CHAT_ID" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=12;" vertex="1" parent="outLane">
+          <mxGeometry x="1490" y="450" width="320" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ================== ERRORS PANEL ================== -->
+        <mxCell id="errPanel" value="ERROR CODES (set on result.error)&#10;&#10;parse_failed            — LLM returned non-JSON&#10;no_match                — primary path found nothing, FALLBACK_MODE=0&#10;needs_fallback_no_mode  — parametric action requested, FALLBACK_MODE=0&#10;fallback_no_match       — REST fallback found nothing&#10;mcp_failed              — MCP fallback raised / no reply&#10;smalltalk_failed        — smalltalk LLM call failed&#10;no_speech               — gateway STT returned empty (audio path only)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="3500" width="700" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- ================== KEY PARAMETERS PANEL ================== -->
+        <mxCell id="paramPanel" value="KEY ENV PARAMETERS — what they control&#10;&#10;HA_URL · HA_TOKEN                — every Home Assistant call&#10;LMSTUDIO_URL/MODEL/API_KEY      — default LLM (parser, smalltalk, state-formatter, MCP)&#10;LMSTUDIO_TEMPERATURE/NO_THINK   — determinism + suppress &lt;think&gt; tags&#10;LMSTUDIO_MCP_ALLOWED_TOOLS      — MCP whitelist (Mode 2)&#10;LLM_HISTORY_SIZE                — turns kept per chat (0 = no history)&#10;HISTORY_INCLUDE_ASSISTANT       — store assistant replies?&#10;HISTORY_APPEND_EXECUTIONS       — append HA actions to assistant turn&#10;MAX_ACTIONS_PER_COMMAND         — cap per request (0 = no cap)&#10;FALLBACK_MODE                   — 0 off · 1 REST · 2 MCP&#10;FALLBACK_REST_DOMAINS / MAX     — filter for REST fallback prompt&#10;RAG_ENABLED                     — vector retrieval vs entities.yaml&#10;RAG_TOP_K · RAG_KEYWORD_BOOST   — retrieval depth + keyword bias&#10;RAG_EMBED_*                     — embedding endpoint (defaults to LMSTUDIO_*)&#10;RAG_QUERY_REWRITE               — enable rewriter + intent classification&#10;RAG_REWRITE_*                   — rewriter LLM endpoint (defaults to LMSTUDIO_*)&#10;RAG_CLARIFY_GAP_THRESHOLD       — distance gap below which clarify (0 = off)&#10;RAG_CLARIFY_SAME_DOMAIN_ONLY    — restrict clarification to same domain&#10;TTS_EXTERNAL_URL/VOICE          — external TTS (gateway returns WAV when tts=true)&#10;GATEWAY_API_KEY                 — gateway auth (X-Api-Key header)&#10;GATEWAY_TELEGRAM_PUSH           — also push receipt to MY_CHAT_ID&#10;WHISPER_BACKEND + WHISPER_*     — local vs external STT" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666;align=left;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="800" y="3500" width="1100" height="500" as="geometry" />
+        </mxCell>
+
+        <!-- ================== EDGES ================== -->
+
+        <!-- INPUT → STT / DISPATCH -->
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="inTgVoice" target="sttBox"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="inRpiAudio" target="sttBox"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e3" value="local" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="sttBox" target="sttLocal"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" value="external" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="sttBox" target="sttExt"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4b" value="empty" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="sttBox" target="sttEmpty"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="sttLocal" target="sttDone"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="sttExt" target="sttDone"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- text inputs bypass STT -->
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="inTgText" target="histSnap"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="inRpiText" target="histSnap"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="sttDone" target="histSnap"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- core flow -->
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="histSnap" target="bqDec"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e11" value="true → rewriter" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="bqDec" target="rwCall"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" value="false → legacy" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="bqDec" target="enrichBox"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="rwCall" target="intentDec"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e14" value="smalltalk / clarification" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="intentDec" target="smallCall"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="smallCall" target="smallResult"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e16" value="command" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="intentDec" target="merge1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="enrichBox" target="merge1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="merge1" target="ragDec"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e19" value="false" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="ragDec" target="legacyParse"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e20" value="true" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="ragDec" target="ragQuery"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e20b" value="0 candidates" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="ragQuery" target="ragEmpty"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e20c" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="ragEmpty" target="legacyParse"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="ragQuery" target="confDec"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e22" value="ambiguous" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="confDec" target="clarify"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e23" value="confident" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="confDec" target="ragParse"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="legacyParse" target="cmdMerge"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="ragParse" target="cmdMerge"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="cmdMerge" target="cmdDec"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e27" value="empty / needs_fallback" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="cmdDec" target="fbDec"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e28" value="actions present" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="cmdDec" target="execLoop"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e29" value="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="fbDec" target="fbREST"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e30" value="2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="fbDec" target="fbMCP"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e31" value="0 / no match" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="fbDec" target="fbErr"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- REST returns to execLoop (its actions still need to run) -->
+        <mxCell id="e32" value="actions found" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="fbREST" target="execLoop"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e32b" value="no match" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="fbREST" target="fbErr"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <!-- MCP returns reply directly -->
+        <mxCell id="e33" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="fbMCP" target="finalResult"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e34" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="execLoop" target="histAppend"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e35" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="execLoop" target="stateDec"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e36" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="stateDec" target="stateFmt"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e37" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="stateDec" target="finalResult"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e38" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="stateFmt" target="finalResult"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e39" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="histAppend" target="finalResult"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e40" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="fbErr" target="finalResult"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e41" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="smallResult" target="finalResult"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e42" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="clarify" target="finalResult"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- output -->
+        <mxCell id="e43" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="finalResult" target="outDec"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e44" value="Telegram" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="outDec" target="tgFmt"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e45" value="Gateway" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="outDec" target="gwTtsDec"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e46" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="tgFmt" target="tgOut"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e47" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="gwTtsDec" target="gwWav"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e48" value="no / fail" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="gwTtsDec" target="gwJson"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e49" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="gwWav" target="rpiOut"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e50" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;" edge="1" parent="1" source="gwJson" target="rpiOut"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e51" value="parallel" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="outDec" target="gwPush"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e52" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="gwPush" target="tgPushOut"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -27,6 +27,8 @@ from core.config import (
     FALLBACK_REST_MAX_ENTITIES,
     RAG_ENABLED,
     RAG_QUERY_REWRITE,
+    RAG_CLARIFY_GAP_THRESHOLD,
+    RAG_CLARIFY_SAME_DOMAIN_ONLY,
     HISTORY_INCLUDE_ASSISTANT,
     HISTORY_APPEND_EXECUTIONS,
 )
@@ -34,6 +36,7 @@ from core.llm import (
     parse_command,
     parse_command_with_states,
     parse_command_rag,
+    smalltalk_reply,
     format_state_reply,
     _load_entities,
     get_recent_user_messages,
@@ -80,37 +83,97 @@ _RAG_ENRICH_MAX_WORDS = 5
 # ---------------------------------------------------------------------------
 
 
-def _resolve_command(transcript: str, chat_id: int) -> dict | None:
+def _build_clarification(rag_entities: list[dict]) -> str | None:
+    """If the top-1 vs top-2 distance gap is below the configured threshold,
+    return a clarification question instead of letting the parser pick blindly.
+    Returns None when confident enough or clarification is disabled.
+    """
+    if len(rag_entities) >= 2:
+        top = rag_entities[0]
+        second = rag_entities[1]
+        d1 = top.get("distance", 0.0) or 0.0
+        d2 = second.get("distance", 0.0) or 0.0
+        gap = d2 - d1
+        logger.info(
+            f"[Processor] RAG confidence | top1='{top.get('entity_id')}' "
+            f"d1={d1:.4f} | top2='{second.get('entity_id')}' d2={d2:.4f} | "
+            f"gap={gap:.4f} | threshold={RAG_CLARIFY_GAP_THRESHOLD} | "
+            f"same_domain={top.get('domain') == second.get('domain')}"
+        )
+    elif rag_entities:
+        logger.info(
+            f"[Processor] RAG confidence | only 1 candidate "
+            f"'{rag_entities[0].get('entity_id')}' "
+            f"d={rag_entities[0].get('distance', 0.0):.4f}"
+        )
+
+    if RAG_CLARIFY_GAP_THRESHOLD <= 0 or len(rag_entities) < 2:
+        return None
+
+    top = rag_entities[0]
+    second = rag_entities[1]
+    if RAG_CLARIFY_SAME_DOMAIN_ONLY and top.get("domain") != second.get("domain"):
+        return None
+
+    gap = (second.get("distance", 0.0) or 0.0) - (top.get("distance", 0.0) or 0.0)
+    if gap >= RAG_CLARIFY_GAP_THRESHOLD:
+        return None
+
+    name_a = top.get("friendly_name") or top.get("entity_id")
+    name_b = second.get("friendly_name") or second.get("entity_id")
+    logger.info(
+        f"[Processor] Clarification ausgeloest | gap={gap:.4f} < "
+        f"{RAG_CLARIFY_GAP_THRESHOLD} | A='{name_a}' B='{name_b}'"
+    )
+    return f"Meinst du {name_a} oder {name_b}?"
+
+
+def _resolve_command(transcript: str, embed_query: str, chat_id: int) -> dict | None:
     """Pick the right LLM entry point (RAG or legacy) for the primary path.
+
+    `embed_query` is what gets embedded for RAG retrieval (may be rewritten).
+    `transcript` is what the parser LLM sees (original user text).
 
     RAG errors are caught and logged here, and the function falls back to the
     legacy entities.yaml path so one bad embedding call doesn't kill a command.
+
+    May return a special dict {"_clarify": "<question>"} when RAG retrieval is
+    ambiguous — the caller surfaces that as a reply with no actions.
     """
     if RAG_ENABLED:
         try:
             from core.rag.index import query as rag_query
 
-            embed_query = transcript
-            if RAG_QUERY_REWRITE:
-                from core.rag.rewriter import rewrite_query
-                embed_query = rewrite_query(transcript, chat_id=chat_id)
-            elif len(transcript.split()) <= _RAG_ENRICH_MAX_WORDS:
-                context: list[str] = [m for m in get_recent_user_messages(chat_id) if m != transcript]
-                if HISTORY_INCLUDE_ASSISTANT:
-                    context.extend(get_recent_assistant_replies(chat_id))
-                if context:
-                    embed_query = " | ".join(context) + " → " + transcript
-                    logger.info(f"[Processor] RAG embed query enriched: '{embed_query}'")
-
             rag_entities = rag_query(embed_query)
             if rag_entities:
                 logger.info(f"[Processor] RAG path | {len(rag_entities)} candidates")
+                clarification = _build_clarification(rag_entities)
+                if clarification:
+                    return {"_clarify": clarification}
                 return parse_command_rag(transcript, rag_entities, chat_id=chat_id)
             logger.warning("[Processor] RAG returned no candidates — legacy path")
         except Exception as e:
             logger.error(f"[Processor] RAG failed: {e} — legacy path")
 
     return parse_command(transcript, chat_id=chat_id)
+
+
+def _build_embed_query(transcript: str, chat_id: int) -> tuple[str, str]:
+    """Return (embed_query, intent). intent is always 'command' when rewriter off."""
+    if RAG_QUERY_REWRITE:
+        from core.rag.rewriter import rewrite_query
+        rw = rewrite_query(transcript, chat_id=chat_id)
+        return rw.get("query") or transcript, rw.get("intent") or "command"
+
+    embed_query = transcript
+    if len(transcript.split()) <= _RAG_ENRICH_MAX_WORDS:
+        context: list[str] = [m for m in get_recent_user_messages(chat_id) if m != transcript]
+        if HISTORY_INCLUDE_ASSISTANT:
+            context.extend(get_recent_assistant_replies(chat_id))
+        if context:
+            embed_query = " | ".join(context) + " → " + transcript
+            logger.info(f"[Processor] RAG embed query enriched: '{embed_query}'")
+    return embed_query, "command"
 
 
 def _new_result(transcript: str) -> dict:
@@ -143,9 +206,24 @@ def process_transcript(transcript: str, chat_id: int = 0) -> dict:
     # seeing the current turn that the primary path is about to append.
     history_snapshot = get_history_snapshot(chat_id)
 
-    command = _resolve_command(transcript, chat_id)
+    # Rewriter (when enabled) classifies intent and produces the embed query.
+    embed_query, intent = _build_embed_query(transcript, chat_id)
+
+    if intent in ("smalltalk", "clarification"):
+        logger.info(f"[Processor] Intent={intent} — routing to smalltalk LLM")
+        chat_reply = smalltalk_reply(transcript, chat_id=chat_id)
+        result["reply"] = chat_reply or ""
+        if not chat_reply:
+            result["error"] = "smalltalk_failed"
+        return result
+
+    command = _resolve_command(transcript, embed_query, chat_id)
     if not command:
         result["error"] = "parse_failed"
+        return result
+
+    if command.get("_clarify"):
+        result["reply"] = command["_clarify"]
         return result
 
     reply = command.get("reply", "")

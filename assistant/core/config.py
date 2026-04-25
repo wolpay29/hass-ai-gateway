@@ -119,6 +119,16 @@ RAG_REWRITE_MODEL = os.getenv("RAG_REWRITE_MODEL", "") or LMSTUDIO_MODEL
 RAG_REWRITE_TIMEOUT = int(os.getenv("RAG_REWRITE_TIMEOUT", str(LMSTUDIO_TIMEOUT)))
 RAG_REWRITE_TEMPERATURE = float(os.getenv("RAG_REWRITE_TEMPERATURE", "0.1"))
 
+# Confidence-based clarification: when the top-1 RAG hit is barely closer than
+# top-2 (i.e. the user could have meant either entity), ask back instead of
+# guessing. Compares (distance[1] - distance[0]) against this threshold —
+# if the gap is smaller, we ask. Lower distance = better in sqlite-vec.
+# Set to 0 to disable. Typical useful values: 0.02 - 0.08.
+RAG_CLARIFY_GAP_THRESHOLD = float(os.getenv("RAG_CLARIFY_GAP_THRESHOLD", "0"))
+# Only clarify across entities of the SAME domain (avoids "meinst du das licht
+# oder den temperatur-sensor?" — different domains usually mean different intent).
+RAG_CLARIFY_SAME_DOMAIN_ONLY = os.getenv("RAG_CLARIFY_SAME_DOMAIN_ONLY", "true").lower() == "true"
+
 # UNIVERSAL (both RAG modes): if true, assistant turns are stored in history so
 # the LLM sees its own prior replies on the next turn. In RAG mode those replies
 # are additionally used to enrich the embed query for short follow-ups. If false,

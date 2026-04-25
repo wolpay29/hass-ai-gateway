@@ -215,6 +215,72 @@ def append_execution_summary(chat_id: int, summary: str) -> None:
             return
 
 
+def smalltalk_reply(transcript: str, chat_id: int = 0) -> str | None:
+    """Free-form chat reply for non-command intents (smalltalk / clarification).
+
+    Uses the same LLM as the parser but a dedicated 'smalltalk' system prompt
+    that produces casual German prose (no JSON, no actions). History is included
+    so follow-ups feel coherent. Returns None on error so the caller can fall
+    back gracefully.
+    """
+    transcript = (transcript or "").strip()
+    if not transcript:
+        return None
+
+    system_prompt = _build_prompt("smalltalk")
+
+    history = []
+    if LLM_HISTORY_SIZE > 0 and chat_id != 0:
+        history = _history.get(chat_id, [])
+
+    logger.info(
+        f"[LLM Smalltalk] Transcript: '{transcript}' | Modell: {LMSTUDIO_MODEL} | "
+        f"History: {len(history) // 2}"
+    )
+
+    try:
+        endpoint = f"{LMSTUDIO_URL}/v1/chat/completions"
+        payload = {
+            "model": LMSTUDIO_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                *history,
+                {"role": "user", "content": transcript},
+            ],
+            "temperature": LMSTUDIO_TEMPERATURE,
+        }
+        response = requests.post(
+            endpoint, json=payload, headers=_lmstudio_headers(), timeout=LMSTUDIO_TIMEOUT
+        )
+        response.raise_for_status()
+        content = (response.json()["choices"][0]["message"]["content"] or "").strip()
+
+        # Strip stray quotes / leading "Assistent:" labels some models add.
+        content = content.strip('"').strip("'")
+        content = re.sub(r"^(Assistent|Assistant)\s*:\s*", "", content, flags=re.IGNORECASE)
+
+        if not content:
+            logger.warning("[LLM Smalltalk] Leere Antwort")
+            return None
+
+        logger.info(f"[LLM Smalltalk] Antwort: {content}")
+
+        if LLM_HISTORY_SIZE > 0 and chat_id != 0:
+            history.append({"role": "user", "content": transcript})
+            if HISTORY_INCLUDE_ASSISTANT:
+                history.append({"role": "assistant", "content": content})
+            max_entries = LLM_HISTORY_SIZE * (2 if HISTORY_INCLUDE_ASSISTANT else 1)
+            if len(history) > max_entries:
+                history = history[-max_entries:]
+            _history[chat_id] = history
+
+        return content
+
+    except Exception as e:
+        logger.error(f"[LLM Smalltalk] Fehler: {e}")
+        return None
+
+
 def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -> dict | None:
     """RAG path: entity list with explicit per-entity actions and optional meta hints.
 

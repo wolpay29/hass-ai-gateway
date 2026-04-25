@@ -1,16 +1,21 @@
 """
-core.rag.rewriter — pre-RAG query normalization.
+core.rag.rewriter — pre-RAG query normalization + intent classification.
 
 Runs a small LLM call BEFORE the embedding step to:
+  - classify intent (command | smalltalk | clarification)
   - fix typos and STT errors ("lciht" -> "licht")
   - resolve pronouns / follow-ups from recent history ("und wieder aus")
   - preserve the original meaning — never invent entities or actions
 
-The output is a single short German search phrase that gets embedded by the
-RAG index. On any error or empty output, the original transcript is returned
-so the pipeline never breaks.
+Returns a dict {"intent": str, "query": str}. On any error or empty output,
+returns {"intent": "command", "query": <original transcript>} so the pipeline
+never breaks (commands are the safe default — they go through the normal RAG
++ parser path).
 """
+import json
 import logging
+import re
+
 import requests
 import yaml
 from pathlib import Path
@@ -28,6 +33,8 @@ from core.config import (
 from core.llm import get_recent_user_messages, get_recent_assistant_replies
 
 logger = logging.getLogger(__name__)
+
+_VALID_INTENTS = {"command", "smalltalk", "clarification"}
 
 _prompts_cache: dict | None = None
 
@@ -64,17 +71,22 @@ def _headers() -> dict:
     return h
 
 
-def rewrite_query(transcript: str, chat_id: int = 0) -> str:
-    """Return a normalized search phrase for the RAG embed step.
+def _safe_default(transcript: str) -> dict:
+    return {"intent": "command", "query": transcript}
 
-    Falls back to the original transcript on any error or empty output.
+
+def rewrite_query(transcript: str, chat_id: int = 0) -> dict:
+    """Classify intent and normalize the query for RAG.
+
+    Returns {"intent": "command|smalltalk|clarification", "query": str}.
+    Falls back to {"intent": "command", "query": <original>} on any error.
     """
-    if not RAG_QUERY_REWRITE:
-        return transcript
-
     transcript = (transcript or "").strip()
     if not transcript:
-        return transcript
+        return _safe_default(transcript)
+
+    if not RAG_QUERY_REWRITE:
+        return _safe_default(transcript)
 
     try:
         prompts = _load_prompts()
@@ -99,22 +111,27 @@ def rewrite_query(transcript: str, chat_id: int = 0) -> str:
             endpoint, json=payload, headers=_headers(), timeout=RAG_REWRITE_TIMEOUT
         )
         response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
+        content = response.json()["choices"][0]["message"]["content"] or ""
 
-        rewritten = (content or "").strip().strip('"').strip("'")
-        # Single line only; LLMs occasionally add explanations on extra lines.
-        rewritten = rewritten.splitlines()[0].strip() if rewritten else ""
+        match = re.search(r"\{.*\}", content, re.DOTALL)
+        if not match:
+            logger.warning(f"[Rewriter] Kein JSON in Antwort: {content!r}")
+            return _safe_default(transcript)
 
-        if not rewritten:
-            logger.warning("[Rewriter] Leere Antwort — verwende Originaltranskript")
-            return transcript
+        parsed = json.loads(match.group())
+        intent = (parsed.get("intent") or "").strip().lower()
+        query = (parsed.get("query") or "").strip()
 
-        if rewritten.lower() == transcript.lower():
-            logger.info(f"[Rewriter] Unveraendert: '{transcript}'")
-        else:
-            logger.info(f"[Rewriter] '{transcript}' -> '{rewritten}'")
-        return rewritten
+        if intent not in _VALID_INTENTS:
+            logger.warning(f"[Rewriter] Unbekannter intent {intent!r} — fallback command")
+            intent = "command"
+
+        if not query:
+            query = transcript
+
+        logger.info(f"[Rewriter] '{transcript}' -> intent={intent} | query='{query}'")
+        return {"intent": intent, "query": query}
 
     except Exception as e:
-        logger.error(f"[Rewriter] Fehler ({e}) — verwende Originaltranskript")
-        return transcript
+        logger.error(f"[Rewriter] Fehler ({e}) — fallback command + Originaltranskript")
+        return _safe_default(transcript)

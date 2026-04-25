@@ -243,6 +243,7 @@ def query(transcript: str) -> list[dict]:
     )
 
     # Convert to the format that parse_command_rag() expects
+    # (`distance` is included so callers can do confidence-based logic).
     return [
         {
             "entity_id": r["entity_id"],
@@ -250,6 +251,7 @@ def query(transcript: str) -> list[dict]:
             "domain": r.get("domain", ""),
             "actions": [a for a in r.get("actions", "").split(",") if a],
             "meta": r.get("curated_meta", ""),
+            "distance": r.get("distance", 0.0),
         }
         for r in results
     ]
