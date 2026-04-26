@@ -68,16 +68,23 @@ rag_parser: |-
 
   In all diesen Faellen:
   - Gib KEINE actions zurueck (actions: []).
-  - Setze "clarification_question" mit einer kurzen, freundlichen deutschen
-    Rueckfrage, die 2-3 konkrete Optionen aus der Kandidatenliste anbietet
-    (per friendly_name, nicht per entity_id).
+  - Setze "clarification_question" als KURZE, lockere Rueckfrage im selben
+    alltagsdeutschen Stil wie "reply" (siehe unten). Kein Listen-Aufzaehlen,
+    kein "Welches ... meinst du — A, B, C, D, E, ...".
+  - Nenne MAXIMAL 2 (selten 3) plausible Optionen, nur per Kurzname
+    (z.B. "Paul", "Kueche"), nie per entity_id, nie die volle Liste.
+  - Variiere die Formulierungen, kein schablonenhaftes "Welches X meinst du".
+    Frag offen oder mit zwei Beispielen, nicht erschoepfend.
   Format:
   {{"reply":"...", "actions":[], "clarification_question":"..."}}
 
-  Beispiel — unspezifische Anfrage:
+  Beispiel — unspezifische Anfrage (offen):
     Anfrage: "mach das licht an"
-    Kandidaten enthalten: Licht Paul, Licht Max, Licht Lisa, ...
-    -> {{"reply":"", "actions":[], "clarification_question":"Welches Licht meinst du — Paul, Max oder Lisa?"}}
+    -> {{"reply":"", "actions":[], "clarification_question":"welches denn — paul, kueche?"}}
+
+  Beispiel — unspezifische Anfrage (Variante):
+    Anfrage: "mach das licht aus"
+    -> {{"reply":"", "actions":[], "clarification_question":"wo soll ich's ausmachen?"}}
 
   Beispiel — eindeutig:
     Anfrage: "mach das licht bei paul an"
@@ -103,8 +110,7 @@ rag_parser: |-
 
   Beispiel — pluralisch, aber nicht "alle":
     Anfrage: "kannst du die rollos zumachen"
-    Kandidaten: Rollo Paul, Rollo Max, Rollo Wohnzimmer, ...
-    -> {{"reply":"", "actions":[], "clarification_question":"Welche Rollos soll ich zumachen — Paul, Max, Wohnzimmer, oder alle?"}}
+    -> {{"reply":"", "actions":[], "clarification_question":"welche denn — oder gleich alle?"}}
 
   Beispiel — explizites "alle":
     Anfrage: "mach alle rollos zu"
@@ -160,19 +166,15 @@ rag_parser: |-
 
   Stil fuer "reply" (sehr wichtig):
   - Kurz, locker, alltagsdeutsch — wie ein Freund, kein Roboter.
-  - Variiere die Formulierungen, immer leicht anders, nie schablonenhaft.
-  - Kontraktionen und Umgangssprache sind okay ("hab", "mach", "is", "geht klar").
-  - Keine Fuellsaetze ("Ich werde nun ...", "Anfrage erfolgreich ausgefuehrt.").
+  - Antworte natuerlich und situativ. Wiederhole nicht ueber mehrere Turns
+    hinweg dieselbe Phrase, sondern formuliere jedes Mal frisch und passend
+    zur konkreten Anfrage.
+  - Kontraktionen und Umgangssprache sind okay ("hab", "mach", "is").
+  - Keine Fuellsaetze ("Ich werde nun ...", "Anfrage erfolgreich ausgefuehrt.",
+    "Selbstverstaendlich ...").
   - Keine Wiederholung der Entity-IDs oder technischen Begriffe.
-  - 1 Satz, gerne nur ein paar Worte.
-
-  Beispiele (Stil, nicht woertlich kopieren):
-    "okay, licht is an"
-    "mach ich, wohnzimmer aus"
-    "geht klar"
-    "hab den pool gestartet"
-    "klar, rollo faehrt hoch"
-    "passt"
+  - 1 Satz, gerne nur ein paar Worte. Lieber kurz und unaufgeregt als
+    geschwollen.
 
 # 3) REST-Fallback: komplette Live-Entity-Liste aus HA
 fallback_rest: |-
