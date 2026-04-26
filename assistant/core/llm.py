@@ -301,16 +301,79 @@ def smalltalk_reply(transcript: str, chat_id: int = 0) -> str | None:
         return None
 
 
+_RELEVANT_ATTRS_BY_DOMAIN: dict[str, tuple[str, ...]] = {
+    "climate": ("current_temperature", "temperature", "hvac_mode", "hvac_action", "preset_mode", "humidity", "current_humidity", "fan_mode"),
+    "cover":   ("current_position", "current_tilt_position"),
+    "light":   ("brightness", "color_temp", "color_mode", "rgb_color"),
+    "fan":     ("percentage", "preset_mode"),
+    "media_player": ("media_title", "media_artist", "volume_level", "source"),
+    "weather": ("temperature", "humidity", "wind_speed"),
+}
+
+
+def _humanize_state(domain: str, state: str | None) -> str:
+    if state is None:
+        return "unbekannt"
+    if domain in ("light", "switch", "automation", "input_boolean", "fan", "media_player"):
+        if state == "on":
+            return "an"
+        if state == "off":
+            return "aus"
+    if domain == "binary_sensor":
+        if state == "on":
+            return "aktiv"
+        if state == "off":
+            return "inaktiv"
+    return str(state)
+
+
+def _format_entity_with_state(e: dict, ha_state: dict | None) -> str:
+    """Eine Entity-Zeile fuer den RAG-Prompt — mit aktuellem state und relevanten Attributen.
+
+    e: Kandidat aus dem RAG-Index ({entity_id, friendly_name, domain, actions, meta}).
+    ha_state: HA-Live-Antwort (state + attributes) oder None falls Abruf fehlschlug.
+    """
+    eid = e["entity_id"]
+    domain = e.get("domain") or (eid.split(".", 1)[0] if "." in eid else "")
+    name = e.get("friendly_name") or "-"
+
+    if ha_state is None:
+        state_str = "unbekannt"
+        attrs_str = ""
+    else:
+        raw_state = ha_state.get("state")
+        attrs = ha_state.get("attributes", {}) or {}
+        unit = attrs.get("unit_of_measurement") or ""
+        human = _humanize_state(domain, raw_state)
+        state_str = f"{human} {unit}".strip() if unit and human not in ("an", "aus", "aktiv", "inaktiv", "unbekannt") else human
+
+        relevant = _RELEVANT_ATTRS_BY_DOMAIN.get(domain, ())
+        parts = []
+        for k in relevant:
+            v = attrs.get(k)
+            if v is None or v == "":
+                continue
+            parts.append(f"{k}={v}")
+        attrs_str = (" | " + ", ".join(parts)) if parts else ""
+
+    line = (
+        f'- {eid} | name: {name} | state: {state_str}{attrs_str} | '
+        f'actions: {", ".join(e.get("actions", [])) or "-"}'
+    )
+    if e.get("meta"):
+        line += f' | note: {e["meta"]}'
+    return line
+
+
 def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -> dict | None:
-    """RAG path: entity list with explicit per-entity actions and optional meta hints.
+    """RAG path: entity list mit aktuellen States, Attributen und expliziten actions.
 
     Expected shape of each dict in `entities`:
         {entity_id, friendly_name, domain, actions: list[str], meta: str}
 
-    Unlike parse_command_with_states() this prompt does NOT describe
-    domain-to-action rules generically — each entity lists its own valid
-    actions directly. Only `needs_fallback` is explained here, because it
-    is a control signal rather than a real HA action and is always available.
+    Vor dem LLM-Call werden States aller Kandidaten parallel aus HA geholt, sodass
+    das LLM Statusabfragen direkt beantworten und Bedingungen/Berechnungen
+    eigenstaendig durchfuehren kann (keine zweite get_state-Runde noetig).
     """
     if not entities:
         logger.warning("[LLM RAG] Keine RAG-Entities uebergeben")
@@ -318,16 +381,12 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
 
     valid_ids = {e["entity_id"] for e in entities}
 
-    def _fmt(e: dict) -> str:
-        line = (
-            f'- {e["entity_id"]} | name: {e.get("friendly_name") or "-"} | '
-            f'actions: {", ".join(e.get("actions", [])) or "-"}'
-        )
-        if e.get("meta"):
-            line += f' | note: {e["meta"]}'
-        return line
+    # States parallel fuer alle Kandidaten holen — verspaetete Imports gegen Zyklen.
+    from core.ha import get_states_bulk
+    states_map = get_states_bulk(list(valid_ids))
+    logger.info(f"[LLM RAG] States geholt: {len(states_map)}/{len(valid_ids)}")
 
-    entity_list = "\n".join(_fmt(e) for e in entities)
+    entity_list = "\n".join(_format_entity_with_state(e, states_map.get(e["entity_id"])) for e in entities)
 
     system_prompt = _build_prompt("rag_parser", entity_list=entity_list)
 
@@ -383,6 +442,10 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
                 continue
             if not act.get("domain") and "." in eid:
                 act["domain"] = eid.split(".", 1)[0]
+            sd = act.get("service_data")
+            if sd is not None and not isinstance(sd, dict):
+                logger.warning(f"[LLM RAG] service_data fuer '{eid}' kein Dict — verwerfe")
+                act.pop("service_data", None)
             validated.append(act)
 
         if MAX_ACTIONS_PER_COMMAND > 0 and len(validated) > MAX_ACTIONS_PER_COMMAND:
@@ -487,6 +550,10 @@ def parse_command_with_states(transcript: str, states: list[dict], chat_id: int 
             # domain nachziehen falls das Modell sie nicht geliefert hat
             if not act.get("domain") and "." in eid:
                 act["domain"] = eid.split(".", 1)[0]
+            sd = act.get("service_data")
+            if sd is not None and not isinstance(sd, dict):
+                logger.warning(f"[LLM Fallback REST] service_data fuer '{eid}' kein Dict — verwerfe")
+                act.pop("service_data", None)
             validated.append(act)
 
         if MAX_ACTIONS_PER_COMMAND > 0 and len(validated) > MAX_ACTIONS_PER_COMMAND:
@@ -511,117 +578,3 @@ def parse_command_with_states(transcript: str, states: list[dict], chat_id: int 
         return None
 
 
-def _format_state_simple(state_data: list[dict]) -> str:
-    """Programmatischer Fallback falls der zweite LLM-Aufruf fehlschlaegt."""
-    parts = []
-    for item in state_data:
-        ha = item.get("ha_response")
-        # Kuratierte Beschreibung aus entities.yaml bevorzugen (ist menschenfreundlicher
-        # als der oft technische HA friendly_name wie "SN: 3015651602 PV Power")
-        label = item.get("description") or item["entity_id"]
-        if ha is None:
-            parts.append(f"{label}: nicht verfügbar")
-            continue
-        state = ha.get("state", "unbekannt")
-        attrs = ha.get("attributes", {})
-        unit = attrs.get("unit_of_measurement", "")
-        # Licht/Schalter/Binary-Sensor lesbar machen
-        if state == "on":
-            state = "an"
-        elif state == "off":
-            state = "aus"
-        parts.append(f"{label}: {state}{' ' + unit if unit else ''}")
-    return "\n".join(parts)
-
-
-def format_state_reply(transcript: str, state_data: list[dict], chat_id: int = 0) -> str:
-    """
-    Zweiter LLM-Aufruf: generiert eine natuerliche Antwort basierend auf Live-Zustandsdaten aus HA.
-    Faellt bei Fehler auf einfache programmatische Formatierung zurueck.
-
-    state_data: Liste von dicts mit {entity_id, description, ha_response}
-    """
-    if not state_data:
-        return ""
-
-    data_lines = []
-    for item in state_data:
-        entity_id = item["entity_id"]
-        description = item.get("description", "")
-        ha = item.get("ha_response")
-        if ha is None:
-            data_lines.append(f"- {entity_id} ({description}): FEHLER beim Abruf")
-            continue
-        state = ha.get("state")
-        attributes = ha.get("attributes", {})
-        unit = attributes.get("unit_of_measurement")
-        # Wert bereits mit Einheit zusammensetzen, damit das Modell nichts
-        # kombinieren muss — es kopiert einfach den Wert in die Antwort.
-        value = f"{state} {unit}" if unit else str(state)
-        # Nur relevante Zusatz-Attribute senden (fuer Cover-Position, Climate-Modi etc.)
-        relevant_keys = {
-            "device_class", "current_position", "hvac_mode",
-            "current_temperature", "target_temperature", "humidity",
-        }
-        filtered_attrs = {k: v for k, v in attributes.items() if k in relevant_keys}
-        line = f"- {entity_id} ({description}): value=\"{value}\""
-        if filtered_attrs:
-            line += f" attributes={json.dumps(filtered_attrs, ensure_ascii=False)}"
-        data_lines.append(line)
-
-    data_block = "\n".join(data_lines)
-
-    # WICHTIG: strukturiertes JSON-Output erzwingen — genau wie beim ersten Call.
-    # Thinking-Modelle lassen bei offenen Aufgaben manchmal den "content" leer und
-    # erledigen alles im reasoning_content. Mit erzwungenem JSON-Format produziert
-    # das Modell zuverlaessig Output.
-    system_prompt = _build_prompt("state_formatter")
-
-    user_content = f"Frage: {transcript}\n\nLive-Daten aus Home Assistant:\n{data_block}\n\nAntworte jetzt NUR mit JSON im Format {{\"antwort\":\"...\"}}."
-
-    logger.info(f"[LLM Step2] Transcript: '{transcript}' | Entities: {[i['entity_id'] for i in state_data]}")
-
-    try:
-        endpoint = f"{LMSTUDIO_URL}/v1/chat/completions"
-        payload = {
-            "model": LMSTUDIO_MODEL,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
-            ],
-            "temperature": LMSTUDIO_TEMPERATURE,
-        }
-        response = requests.post(endpoint, json=payload, headers=_lmstudio_headers(), timeout=LMSTUDIO_TIMEOUT)
-        response.raise_for_status()
-        resp_json = response.json()
-        msg = resp_json["choices"][0]["message"]
-        content = msg.get("content") or ""
-
-        logger.info(f"[LLM Step2] Raw: {repr(content)}")
-
-        if not content.strip():
-            reasoning_len = len(msg.get("reasoning_content") or "")
-            logger.warning(
-                f"[LLM Step2] content leer (reasoning_content: {reasoning_len} Zeichen) "
-                f"— nutze programmatischen Fallback"
-            )
-
-        # JSON aus der Antwort extrahieren (gleiche Technik wie im ersten Call)
-        match = re.search(r'\{.*\}', content, re.DOTALL)
-        if match:
-            try:
-                parsed = json.loads(match.group())
-                antwort = (parsed.get("antwort") or "").strip()
-                if antwort:
-                    logger.info(f"[LLM Step2] Antwort: {antwort}")
-                    return antwort
-            except json.JSONDecodeError as e:
-                logger.warning(f"[LLM Step2] JSON-Parsing fehlgeschlagen: {e}")
-
-    except Exception as e:
-        logger.error(f"[LLM Step2] Fehler: {e}")
-
-    # Fallback: einfache programmatische Formatierung
-    fallback = _format_state_simple(state_data)
-    logger.info(f"[LLM Step2] Fallback verwendet: {fallback}")
-    return fallback

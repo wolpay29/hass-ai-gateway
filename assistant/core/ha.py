@@ -1,11 +1,12 @@
 import requests
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from core.config import HA_URL, HA_TOKEN
 
 logger = logging.getLogger(__name__)
 
 
-def call_service(domain: str, action: str, entity_id: str) -> bool:
+def call_service(domain: str, action: str, entity_id: str, service_data: dict | None = None) -> bool:
     headers = {
         "Authorization": f"Bearer {HA_TOKEN}",
         "Content-Type": "application/json"
@@ -14,9 +15,16 @@ def call_service(domain: str, action: str, entity_id: str) -> bool:
     service = "trigger" if action == "trigger" else action
     url = f"{HA_URL}/api/services/{domain}/{service}"
 
+    body: dict = {"entity_id": entity_id}
+    if service_data:
+        body.update(service_data)
+
     try:
-        r = requests.post(url, headers=headers, json={"entity_id": entity_id}, timeout=10)
-        return r.status_code in (200, 201)
+        r = requests.post(url, headers=headers, json=body, timeout=10)
+        ok = r.status_code in (200, 201)
+        if not ok:
+            logger.warning(f"[HA] Service-Call {domain}.{service} {entity_id} -> {r.status_code}: {r.text[:200]}")
+        return ok
     except Exception as e:
         logger.error(f"[HA] Fehler beim Service Call: {e}")
         return False
@@ -96,3 +104,25 @@ def get_state(entity_id: str) -> dict | None:
     except Exception as e:
         logger.error(f"[HA] Fehler beim State Fetch: {e}")
         return None
+
+
+def get_states_bulk(entity_ids: list[str], max_workers: int = 8) -> dict[str, dict]:
+    """Holt States fuer mehrere Entity-IDs parallel. Fehlende/fehlgeschlagene IDs fehlen im Ergebnis.
+
+    Wird vom RAG-Parser genutzt, damit das LLM mit echten Werten und Attributen entscheiden kann.
+    """
+    if not entity_ids:
+        return {}
+
+    out: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = {ex.submit(get_state, eid): eid for eid in entity_ids}
+        for fut in futures:
+            eid = futures[fut]
+            try:
+                res = fut.result(timeout=12)
+                if res is not None:
+                    out[eid] = res
+            except Exception as e:
+                logger.warning(f"[HA] get_states_bulk: '{eid}' fehlgeschlagen: {e}")
+    return out

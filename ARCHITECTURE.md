@@ -80,7 +80,7 @@ can delete any one adapter without touching the others.
 2. Records until silence (simple RMS-based VAD).
 3. POSTs WAV to `bots/voice_gateway/main.py::/audio`.
 4. Gateway calls `core.voice.transcribe_audio` then `core.processor.process_transcript`.
-5. Returns the result JSON.
+5. Returns the result JSON (`reply` already contains the answer — state queries, conditions and calculations are resolved inside the single RAG parser call).
 6. RPi speaks `result["reply"]` with `pyttsx3`.
 7. Gateway optionally also pushes the receipt to Telegram (`GATEWAY_TELEGRAM_PUSH=true`).
 

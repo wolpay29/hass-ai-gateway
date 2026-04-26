@@ -83,7 +83,8 @@ flowchart TD
     RAGON -- "true"  --> RAGQ["rag.index.query(embed_query)<br/>embed → KNN → keyword boost<br/>→ top-K candidates"]
     RAGQ -- "0 candidates" --> LEGACY
 
-    RAGQ --> RAGP["parse_command_rag<br/>(transcript + candidates)<br/>returns: reply, actions[],<br/>clarification_question?"]
+    RAGQ --> STATES["ha.get_states_bulk<br/>(parallel — all K candidates)"]
+    STATES --> RAGP["parse_command_rag<br/>(transcript + candidates + live states)<br/>returns: reply, actions[],<br/>service_data?, clarification_question?"]
 
     RAGP --> CLAR{"clarification_question<br/>set & actions empty ?"}
     CLAR -- "yes" --> CLARIFY[["reply = clarification_question<br/>append_clarification_turn()<br/>actions = []"]]
@@ -102,11 +103,7 @@ flowchart TD
     RESTFB --> EXEC
     MCPFB --> RESULT
 
-    EXEC["For each action:<br/>get_state → ha.get_state<br/>turn_on/off/toggle/trigger → ha.call_service<br/>enforce MAX_ACTIONS_PER_COMMAND"]
-    EXEC --> STATEQ{"any get_state ?"}
-    STATEQ -- "yes" --> FMT["format_state_reply<br/>(2nd LLM call → German)"]
-    STATEQ -- "no"  --> RESULT
-    FMT --> RESULT
+    EXEC["For each action:<br/>ha.call_service(domain, action, entity_id, service_data?)<br/>enforce MAX_ACTIONS_PER_COMMAND"]
     EXEC --> APPEND{"HISTORY_APPEND_EXECUTIONS ?"}
     APPEND -- "yes" --> APPENDH["append_execution_summary"]
     APPENDH --> RESULT
@@ -132,8 +129,9 @@ flowchart TD
     classDef err  fill:#ffe9e9,stroke:#c23a3a,color:#3a0a0a
 
     class TG_TEXT,TG_VOICE,RPI_AUDIO,RPI_TEXT inp
-    class H_TEXT,H_VOICE,GW_AUDIO,GW_TEXT,STT,DISPATCH,SNAP,EMBQ,ENRICH,INTENT,RAGON,CLAR,CMD,FBROUTE,STATEQ,APPEND,CALLER,TTS proc
-    class RW,SMALL,RAGQ,RAGP,LEGACY,RESTFB,MCPFB,FMT llm
+    class H_TEXT,H_VOICE,GW_AUDIO,GW_TEXT,STT,DISPATCH,SNAP,EMBQ,ENRICH,INTENT,RAGON,CLAR,CMD,FBROUTE,APPEND,CALLER,TTS proc
+    class RW,SMALL,RAGQ,RAGP,LEGACY,RESTFB,MCPFB llm
+    class STATES ha
     class EXEC,APPENDH ha
     class RESULT,FMTREPLY,TG_OUT,WAV,JSON,PUSH,CLARIFY out
     class ERR_NM err
@@ -200,9 +198,17 @@ The history block sent to the rewriter is built from `LLM_HISTORY_SIZE` past tur
   3. Keyword boost — curated keywords appearing in transcript multiply distance by `(1 - RAG_KEYWORD_BOOST)`.
   4. Returns top-K candidates with `entity_id`, `friendly_name`, `domain`, `actions`, `meta`, `distance`.
 
-### 3.5 Parser and LLM-driven clarification
+### 3.5 State enrichment + Parser
 
-`core.llm.parse_command_rag(transcript, candidates, chat_id)` runs the parser LLM with the `rag_parser` system prompt and the candidate list injected. Parameters:
+Before the LLM call, `ha.get_states_bulk()` fetches the current HA state (including all relevant attributes) for all K candidates **in parallel**. Each entity line in the prompt therefore shows e.g.:
+
+```
+- sensor.plug_jbl_power | name: JBL Power | state: 10.39 W | actions: -
+- switch.plug_jbl       | name: JBL Steckdose | state: an   | actions: turn_on, turn_off
+- climate.pool          | name: Pool Heizung | state: heat | current_temperature=24.0, temperature=28.0, hvac_mode=heat | actions: set_temperature, set_hvac_mode
+```
+
+`core.llm.parse_command_rag(transcript, candidates, chat_id)` then runs the `rag_parser` prompt with this enriched entity list. Parameters:
 
 - `LMSTUDIO_URL`, `LMSTUDIO_MODEL`, `LMSTUDIO_API_KEY`, `LMSTUDIO_TIMEOUT`
 - `LMSTUDIO_TEMPERATURE`
@@ -210,19 +216,29 @@ The history block sent to the rewriter is built from `LLM_HISTORY_SIZE` past tur
 - `LLM_HISTORY_SIZE`, `HISTORY_INCLUDE_ASSISTANT` (history injected as chat messages)
 - `MAX_ACTIONS_PER_COMMAND` (excess actions get marked `ignored=true`)
 
+Because the LLM already has the live values, it can:
+- **Answer state queries directly** in `reply` (no separate Step2 call needed)
+- **Evaluate conditions** ("turn off if > 15 W" → checks state → acts or abstains)
+- **Calculate parameters** ("5 degrees above outdoor temp" → reads both values → emits `service_data`)
+
 Output JSON:
 
 ```json
 {
   "reply": "...",
-  "actions": [{"entity_id": "...", "action": "...", "domain": "..."}],
+  "actions": [
+    {"entity_id": "...", "action": "...", "domain": "...", "service_data": {...}}
+  ],
   "clarification_question": "..."   // optional
 }
 ```
 
+`service_data` is forwarded verbatim to `ha.call_service` (e.g. `{"temperature": 23}` for `climate.set_temperature`).
+
 Validation rules:
 
 - Every `entity_id` must exist in the candidate list (or in `entities.yaml` for the legacy path); hallucinated IDs are dropped.
+- `service_data` must be a dict; invalid values are stripped.
 - `needs_fallback` is always allowed.
 
 **Clarification (LLM-driven).** The parser itself decides when it cannot fulfil the request unambiguously with the supplied candidates. If it returns a non-empty `clarification_question` and no actions, the processor surfaces it directly:
@@ -244,24 +260,19 @@ The REST fallback uses the *prior* history snapshot so it doesn't see the just�
 
 ### 3.7 Action execution
 
-For each validated action:
-
-- `action == "get_state"` → `core.ha.get_state(entity_id)`; result pushed into `state_queries` for the post-formatter.
-- otherwise → `core.ha.call_service(domain, action, entity_id)`.
+For each validated action `core.ha.call_service(domain, action, entity_id, service_data)` is called. If the LLM returned `service_data` (e.g. `{"temperature": 23}` for `set_temperature`), it is merged into the HA service-call body.
 
 `MAX_ACTIONS_PER_COMMAND > 0` enforces a per-command cap; surplus actions go into `actions_ignored`.
 
-### 3.8 State formatter (only when any `get_state` ran)
+State queries ("wie warm ist der Pool?") are answered directly by the parser in `reply` using the live values from state enrichment — no separate HA call or second LLM pass happens.
 
-`core.llm.format_state_reply()` runs a second LLM call with the `state_formatter` system prompt, turning raw HA values into a single natural German sentence and replacing `result.reply`.
-
-### 3.9 History persistence
+### 3.8 History persistence
 
 - Every parser/smalltalk call stores the user message in `_history[chat_id]` (capped by `LLM_HISTORY_SIZE`).
 - Assistant turns are stored only when `HISTORY_INCLUDE_ASSISTANT=true`.
 - When `HISTORY_APPEND_EXECUTIONS=true` (and assistant turns are stored), `append_execution_summary()` appends `"ausgefuehrt: <action> -> <entity>, …"` to the last assistant entry — this is what enables follow-ups like "und wieder aus" without RAG retrieval becoming too greedy.
 
-### 3.10 Output
+### 3.9 Output
 
 The processor returns a fixed dict:
 
@@ -269,12 +280,14 @@ The processor returns a fixed dict:
 {
   "transcript": "…",
   "reply": "…",
-  "actions_executed": [{"action": "...", "entity_id": "...", "success": true}],
+  "actions_executed": [{"action": "...", "entity_id": "...", "success": true, "service_data": {...}}],
   "actions_ignored":  [{"action": "...", "entity_id": "..."}],
   "error": null,
   "fallback_used": null
 }
 ```
+
+`service_data` is only present in `actions_executed` entries when the LLM supplied parameters (e.g. `{"temperature": 23}`).
 
 Possible `error` codes: `parse_failed`, `no_match`, `fallback_no_match`, `needs_fallback_no_mode`, `mcp_failed`, `smalltalk_failed`.
 Possible `fallback_used`: `null`, `"rest"`, `"mcp"`.
@@ -294,9 +307,9 @@ Renderers:
 | Setting | Effect |
 |---|---|
 | `BOT_TOKEN`, `MY_CHAT_ID` | Telegram bot identity / receipt target for gateway pushes |
-| `HA_URL`, `HA_TOKEN` | All `core.ha` calls (get_state, get_all_states, call_service) |
+| `HA_URL`, `HA_TOKEN` | All `core.ha` calls (get_states_bulk, get_all_states, call_service) |
 | `WHISPER_BACKEND` and friends | Local vs external STT |
-| `LMSTUDIO_*` | Default LLM (parser, smalltalk, state-formatter, MCP) |
+| `LMSTUDIO_*` | Default LLM (parser, smalltalk, MCP fallback) |
 | `LMSTUDIO_TEMPERATURE`, `LMSTUDIO_NO_THINK` | Determinism + `<think>`-tag suppression |
 | `LMSTUDIO_MCP_ALLOWED_TOOLS`, `LMSTUDIO_CONTEXT_LENGTH` | MCP fallback (Mode 2) only |
 | `LLM_HISTORY_SIZE` | How many turns are kept per chat (0 = no history) |
@@ -347,10 +360,11 @@ Renderers:
 2. `process_transcript`, `chat_id = _device_to_chat_id("rpi-wohnzimmer")`.
 3. Rewriter (if on) → `{"intent":"command","query":"wassertemperatur pool"}`.
 4. RAG returns `sensor.pool_temperature`.
-5. Parser → `{"actions":[{"entity_id":"sensor.pool_temperature","action":"get_state","domain":"sensor"}]}`.
-6. `get_state()` → `26.4 °C`.
-7. `format_state_reply` (2nd LLM call) → `"der pool hat 26 grad"`.
-8. `tts=true` + TTS configured → WAV bytes streamed back to RPi.
+5. `get_states_bulk(["sensor.pool_temperature"])` → `{"state": "26.4", "attributes": {"unit_of_measurement": "°C"}}`.
+6. Parser sees `state: 26.4 °C` in the entity line → `{"reply":"Der Pool hat 26,4 °C.","actions":[]}`.
+7. `tts=true` + TTS configured → WAV bytes streamed back to RPi.
+
+No second LLM call. The answer is formed in the same pass as the entity matching.
 
 ### 5.4 Telegram "hi wie geht's?" (smalltalk routing)
 
@@ -368,9 +382,34 @@ Renderers:
 3. Processor sets `result.reply = clarification_question`, leaves `actions_executed = []`, and calls `append_clarification_turn` so the original transcript and question stay in history.
 4. User answers "paul". On the next turn the rewriter (or short-history enrichment) sees the previous turn's context → query becomes `"licht bei paul ausschalten"` → normal RAG path → action executes.
 
-### 5.6 "stell die wohnzimmertemperatur auf 22°C" (needs_fallback → MCP)
+### 5.6 "schalte die JBL-Steckdose aus wenn sie mehr als 15 Watt verbraucht" (smart condition)
 
-1. Parser identifies `climate.wohnzimmer` but emits `action="needs_fallback"` (parametric).
+1. RAG returns `switch.plug_jbl`, `sensor.plug_jbl_power`, `binary_sensor.plug_jbl_overpowering`.
+2. `get_states_bulk(...)` → `sensor.plug_jbl_power` state `"10.39"`, unit `"W"`.
+3. Parser sees `state: 10.39 W` and evaluates the condition: 10.39 < 15 → no action:
+   ```json
+   {"reply":"Verbrauch liegt nur bei 10 W, also unter 15 W — ich lass sie an.","actions":[]}
+   ```
+4. No HA call. Reply spoken by RPi.
+
+If the power had been 18 W the parser would emit `{"actions":[{"entity_id":"switch.plug_jbl","action":"turn_off","domain":"switch"}]}`.
+
+### 5.7 "stell die Solltemperatur der Poolheizung 5 Grad über der Außentemperatur" (calculation + service_data)
+
+1. RAG returns `climate.pool`, `sensor.aussentemperatur`.
+2. `get_states_bulk(...)` → pool `current_temperature=24, temperature=28`, outdoor `state: "18.2 °C"`.
+3. Parser calculates 18.2 + 5 = 23.2, rounds to 23:
+   ```json
+   {
+     "reply": "Außen sind 18 °C, ich setze die Poolheizung auf 23 °C.",
+     "actions": [{"entity_id":"climate.pool","action":"set_temperature","domain":"climate","service_data":{"temperature":23}}]
+   }
+   ```
+4. `call_service("climate","set_temperature","climate.pool",{"temperature":23})` runs.
+
+### 5.8 "stell die wohnzimmertemperatur auf 22°C" (needs_fallback → MCP)
+
+1. Parser identifies `climate.wohnzimmer` but can't determine the correct service parameter from context → emits `action="needs_fallback"`.
 2. `FALLBACK_MODE=2` → `fallback_via_mcp(transcript)` calls LM Studio with the HA MCP server.
 3. MCP tool `HassClimateSetTemperature` runs and returns success.
 4. Reply text from MCP becomes `result.reply`; `fallback_used="mcp"`.
@@ -389,9 +428,9 @@ Renderers:
 | [assistant/core/rag/index.py](assistant/core/rag/index.py) | Build / query the entity vector index |
 | [assistant/core/rag/embeddings.py](assistant/core/rag/embeddings.py) | Embedding HTTP client (LM Studio) |
 | [assistant/core/rag/store.py](assistant/core/rag/store.py) | sqlite-vec persistence for vectors |
-| [assistant/core/llm.py](assistant/core/llm.py) | All LLM calls: parser (legacy + RAG), state formatter, smalltalk, clarification round-trip |
+| [assistant/core/llm.py](assistant/core/llm.py) | All LLM calls: parser (legacy + RAG with live states), REST fallback, smalltalk, clarification |
 | [assistant/core/llm_lmstudio.py](assistant/core/llm_lmstudio.py) | LM Studio MCP fallback (Mode 2) |
-| [assistant/core/ha.py](assistant/core/ha.py) | Home Assistant REST client (get_state, call_service, …) |
-| [assistant/core/prompts.yaml](assistant/core/prompts.yaml) | All system prompts (parser, RAG parser, REST fallback, state formatter, query rewriter, smalltalk) |
+| [assistant/core/ha.py](assistant/core/ha.py) | Home Assistant REST client (get_states_bulk, call_service with service_data, get_all_states) |
+| [assistant/core/prompts.yaml](assistant/core/prompts.yaml) | All system prompts (parser, RAG parser with state context, REST fallback, query rewriter, smalltalk) |
 | [assistant/core/entities.yaml](assistant/core/entities.yaml) | Curated entities (legacy + RAG keyword/meta source) |
 | [assistant/core/config.py](assistant/core/config.py) | All env-driven settings |

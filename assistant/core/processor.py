@@ -35,7 +35,6 @@ from core.llm import (
     parse_command_with_states,
     parse_command_rag,
     smalltalk_reply,
-    format_state_reply,
     _load_entities,
     get_recent_user_messages,
     get_recent_assistant_replies,
@@ -44,7 +43,7 @@ from core.llm import (
     get_history_snapshot,
 )
 from core.llm_lmstudio import fallback_via_mcp
-from core.ha import call_service, get_state, get_all_states
+from core.ha import call_service, get_all_states
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +188,15 @@ def process_transcript(transcript: str, chat_id: int = 0) -> dict:
     actions = command.get("actions", [])
     fallback_states: list[dict] = []
 
+    # Legacy-Pfad (primary_parser) kennt noch "get_state". Im neuen Modell beantwortet
+    # der RAG-Parser Statusfragen direkt im "reply" — get_state ist obsolet. Falls er
+    # trotzdem auftaucht (Legacy oder Halluzination), zu needs_fallback umlenken,
+    # damit der REST/MCP-Fallback die Antwort mit Live-Daten generiert.
+    for a in actions:
+        if a.get("action") == "get_state":
+            logger.info(f"[Processor] Legacy get_state '{a.get('entity_id')}' -> needs_fallback")
+            a["action"] = "needs_fallback"
+
     # -----------------------------------------------------------------------
     # Branch A: needs_fallback — entity matched but action needs parameters
     # (e.g. "set temp to 22", "rollo on 40%") that the curated config can't
@@ -253,17 +261,15 @@ def process_transcript(transcript: str, chat_id: int = 0) -> dict:
             return result
 
     # -----------------------------------------------------------------------
-    # Execute HA actions.
+    # Execute HA actions. Mit States im RAG-Prompt entscheidet das LLM bereits
+    # smart und liefert ggf. service_data fuer parametrierte Aufrufe mit.
+    # Reine Statusabfragen formuliert das LLM direkt im "reply" — kein Step2.
     # -----------------------------------------------------------------------
-    entities_by_id = {e["id"]: e for e in _load_entities()}
-    states_by_id = {s["entity_id"]: s for s in fallback_states}
-
-    state_queries: list[dict] = []  # get_state results for the second LLM pass
-
     for act in actions:
         entity_id = act.get("entity_id")
         action = act.get("action")
         domain = act.get("domain")
+        service_data = act.get("service_data") if isinstance(act.get("service_data"), dict) else None
 
         # Action was dropped by MAX_ACTIONS_PER_COMMAND inside the LLM layer
         if act.get("ignored"):
@@ -275,43 +281,30 @@ def process_transcript(transcript: str, chat_id: int = 0) -> dict:
             result["actions_ignored"].append({"action": action, "entity_id": entity_id})
             continue
 
-        if action == "get_state":
-            ha_response = get_state(entity_id)
-            description = (
-                entities_by_id.get(entity_id, {}).get("description")
-                or states_by_id.get(entity_id, {}).get("friendly_name", "")
-            )
-            state_queries.append({
-                "entity_id": entity_id,
-                "description": description,
-                "ha_response": ha_response,
-            })
-            result["actions_executed"].append({
-                "action": action,
-                "entity_id": entity_id,
-                "success": ha_response is not None,
-            })
-        else:
-            ok = call_service(domain, action, entity_id)
-            result["actions_executed"].append({
-                "action": action,
-                "entity_id": entity_id,
-                "success": ok,
-            })
+        ok = call_service(domain, action, entity_id, service_data)
+        executed_entry = {
+            "action": action,
+            "entity_id": entity_id,
+            "success": ok,
+        }
+        if service_data:
+            executed_entry["service_data"] = service_data
+        result["actions_executed"].append(executed_entry)
 
     # Let the LLM see what actually ran so "und wieder aus" follow-ups work
     if HISTORY_APPEND_EXECUTIONS:
-        executed = [
-            f"{a.get('action')} -> {a.get('entity_id')}"
-            for a in actions
-            if not a.get("ignored")
-            and a.get("action")
-            and a.get("entity_id")
-            and a.get("action") != "needs_fallback"
-        ]
+        executed = []
+        for a in actions:
+            if a.get("ignored") or not a.get("action") or not a.get("entity_id"):
+                continue
+            if a.get("action") == "needs_fallback":
+                continue
+            line = f"{a.get('action')} -> {a.get('entity_id')}"
+            if isinstance(a.get("service_data"), dict) and a["service_data"]:
+                line += f" {a['service_data']}"
+            executed.append(line)
         if executed:
             append_execution_summary(chat_id, "ausgefuehrt: " + ", ".join(executed))
 
-    # If we asked HA for values, second LLM pass formats them as a German sentence
-    result["reply"] = format_state_reply(transcript, state_queries, chat_id=chat_id) if state_queries else reply
+    result["reply"] = reply
     return result

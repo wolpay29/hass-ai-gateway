@@ -19,29 +19,34 @@ _BATCH_SIZE = 32  # texts per LM Studio embedding request
 # Default action sets per HA domain. Used for entities that are NOT in
 # entities.yaml. If an entity IS in entities.yaml, its yaml `actions` list
 # overrides these defaults.
+#
+# Reine Read-Only-Domains (sensor, weather, ...) listen keine Actions: das LLM
+# bekommt deren aktuelle States ohnehin direkt im RAG-Prompt und beantwortet
+# Statusfragen aus diesen Werten — eine separate get_state-Action gibt es nicht
+# mehr. Schaltbare Domains behalten ihre Actions.
 _DOMAIN_ACTIONS: dict[str, list[str]] = {
-    "light":         ["turn_on", "turn_off", "toggle", "get_state"],
-    "switch":        ["turn_on", "turn_off", "toggle", "get_state"],
+    "light":         ["turn_on", "turn_off", "toggle"],
+    "switch":        ["turn_on", "turn_off", "toggle"],
     "automation":    ["trigger"],
-    "sensor":        ["get_state"],
-    "binary_sensor": ["get_state"],
-    "climate":       ["get_state"],
-    "cover":         ["turn_on", "turn_off", "get_state"],
-    "input_boolean": ["turn_on", "turn_off", "toggle", "get_state"],
+    "sensor":        [],
+    "binary_sensor": [],
+    "climate":       ["set_temperature", "set_hvac_mode"],
+    "cover":         ["turn_on", "turn_off", "set_cover_position"],
+    "input_boolean": ["turn_on", "turn_off", "toggle"],
     "script":        ["turn_on"],
     "scene":         ["turn_on"],
     "button":        ["turn_on"],
-    "media_player":  ["get_state"],
-    "fan":           ["turn_on", "turn_off", "get_state"],
-    "lock":          ["turn_on", "turn_off", "get_state"],
-    "person":        ["get_state"],
-    "weather":       ["get_state"],
-    "device_tracker": ["get_state"],
-    "sun":           ["get_state"],
-    "zone":          ["get_state"],
-    "group":         ["turn_on", "turn_off", "toggle", "get_state"],
+    "media_player":  ["turn_on", "turn_off"],
+    "fan":           ["turn_on", "turn_off", "set_percentage"],
+    "lock":          ["turn_on", "turn_off"],
+    "person":        [],
+    "weather":       [],
+    "device_tracker": [],
+    "sun":           [],
+    "zone":          [],
+    "group":         ["turn_on", "turn_off", "toggle"],
 }
-_DEFAULT_ACTIONS = ["get_state"]
+_DEFAULT_ACTIONS: list[str] = []
 
 
 # ---------------------------------------------------------------------------
