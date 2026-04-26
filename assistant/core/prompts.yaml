@@ -123,19 +123,19 @@ query_rewriter: |-
   {transcript}
 
   Antworte AUSSCHLIESSLICH mit JSON in diesem Format, ohne weiteren Text:
-  {{"intent":"command|smalltalk|clarification","query":"..."}}
+  {{"intent":"command|smalltalk","query":"..."}}
 
   Felder:
   - "intent":
-      "command"       — der Nutzer will ein Geraet steuern, einen Zustand abfragen
-                        oder eine Automation ausloesen (z.B. "licht an",
-                        "wie warm ist der pool", "mach das tor auf").
-      "smalltalk"     — Plauderei, Begruessung, allgemeine Frage ohne Geraetebezug
-                        (z.B. "hi", "wie geht's", "danke", "erzaehl mir einen witz").
-      "clarification" — der Nutzer reagiert auf eine vorherige Rueckfrage des
-                        Assistenten oder bezieht sich auf einen vergangenen Turn,
-                        OHNE selbst eine neue Aktion zu verlangen
-                        (z.B. "ja genau", "das erste", "nein doch nicht").
+      "command"   — der Nutzer will ein Geraet steuern, einen Zustand abfragen,
+                    eine Automation ausloesen, oder reagiert auf eine Rueckfrage
+                    des Assistenten mit einer konkreten Antwort die eine Aktion
+                    impliziert (z.B. "licht an", "wie warm ist der pool",
+                    "das im Wohnzimmer", "ja das erste").
+      "smalltalk" — Plauderei, Begruessung, allgemeine Frage ohne Geraetebezug,
+                    oder Reaktion auf Smalltalk des Assistenten
+                    (z.B. "hi", "wie geht's", "danke", "erzaehl mir einen witz",
+                    "haha gut").
   - "query": EINEN kurzen, klaren deutschen Suchsatz, der die Anfrage beschreibt.
       Regeln fuer "query":
         - Bewahre die Bedeutung exakt — erfinde keine Geraete, Raeume, Aktionen.
@@ -143,8 +143,8 @@ query_rewriter: |-
           (z.B. "lciht" -> "licht", "wonzimer" -> "wohnzimmer").
         - Loese Pronomen / Bezuege ("das", "wieder aus", "auch") anhand des
           Verlaufs auf, falls eindeutig. Wenn unklar: Original lassen.
-        - Bei intent != "command" ist "query" weniger wichtig — gib dort einfach
-          den Originaltext oder eine kurze Zusammenfassung zurueck.
+        - Bei intent "smalltalk" ist "query" weniger wichtig — gib dort einfach
+          den Originaltext zurueck.
 
   Beispiele:
     Anfrage: "mach das licht im paul an"
@@ -153,11 +153,11 @@ query_rewriter: |-
     Anfrage: "und wieder aus"  (Verlauf: Nutzer: licht bei paul an)
     -> {{"intent":"command","query":"licht bei paul ausschalten"}}
 
+    Anfrage: "das im Wohnzimmer"  (Verlauf: Assistent: Welches Licht meinst du?)
+    -> {{"intent":"command","query":"licht im wohnzimmer einschalten"}}
+
     Anfrage: "hi wie geht's?"
     -> {{"intent":"smalltalk","query":"hi wie geht's"}}
-
-    Anfrage: "ja genau das"
-    -> {{"intent":"clarification","query":"ja genau das"}}
 
 # 5) Smalltalk: locker antworten, kein JSON, keine Aktionen
 smalltalk: |-

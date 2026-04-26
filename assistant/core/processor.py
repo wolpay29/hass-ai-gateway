@@ -26,7 +26,7 @@ from core.config import (
     FALLBACK_REST_DOMAINS,
     FALLBACK_REST_MAX_ENTITIES,
     RAG_ENABLED,
-    RAG_QUERY_REWRITE,
+    LLM_PREPROCESSOR,
     HISTORY_INCLUDE_ASSISTANT,
     HISTORY_APPEND_EXECUTIONS,
 )
@@ -115,7 +115,7 @@ def _resolve_command(transcript: str, embed_query: str, chat_id: int) -> dict | 
 
 def _build_embed_query(transcript: str, chat_id: int) -> tuple[str, str]:
     """Return (embed_query, intent). intent is always 'command' when rewriter off."""
-    if RAG_QUERY_REWRITE:
+    if LLM_PREPROCESSOR:
         from core.rag.rewriter import rewrite_query
         rw = rewrite_query(transcript, chat_id=chat_id)
         return rw.get("query") or transcript, rw.get("intent") or "command"
@@ -164,7 +164,7 @@ def process_transcript(transcript: str, chat_id: int = 0) -> dict:
     # Rewriter (when enabled) classifies intent and produces the embed query.
     embed_query, intent = _build_embed_query(transcript, chat_id)
 
-    if intent in ("smalltalk", "clarification"):
+    if intent == "smalltalk":
         logger.info(f"[Processor] Intent={intent} — routing to smalltalk LLM")
         chat_reply = smalltalk_reply(transcript, chat_id=chat_id)
         result["reply"] = chat_reply or ""
