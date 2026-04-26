@@ -27,16 +27,10 @@ async def save_bot_message(context: ContextTypes.DEFAULT_TYPE, message):
 
 
 def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
-    keyboard = [
-        [KeyboardButton("🚪 TOR-Steuerung"), KeyboardButton("🏊 Pool-Steuerung")],
-        [KeyboardButton("🔋 Batterie prüfen")],
-    ]
-    return ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True,
-        one_time_keyboard=False,
-        is_persistent=True,
-    )
+    from bot.menu_config import get_main_menu_layout
+    layout = get_main_menu_layout()
+    keyboard = [[KeyboardButton(label) for label in row] for row in layout]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False, is_persistent=True)
 
 
 async def send_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, is_startup=False):

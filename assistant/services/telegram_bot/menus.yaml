@@ -1,0 +1,67 @@
+# Telegram Bot Menu Configuration
+# Edit this file to change the bot's buttons, menus, and Home Assistant automations.
+# No code changes needed — just restart the bot after editing.
+#
+# Structure:
+#   main_menu.layout  — rows of persistent reply-keyboard buttons
+#   menus             — per-button config: either a submenu (rows) or a special action
+#   battery_notification_menu — inline buttons shown with battery alerts
+
+main_menu:
+  layout:
+    - ["🚪 TOR-Steuerung", "🏊 Pool-Steuerung"]
+    - ["🔋 Batterie prüfen"]
+
+menus:
+  "🚪 TOR-Steuerung":
+    title: "🚪 TOR-Optionen wählen:"
+    rows:
+      - - label: "🚶 Tor Geh"
+          callback_data: tor_geh
+          automation: automation.trigger_tor_geh
+          response: "✅ Tor Geh wird ausgelöst..."
+      - - label: "🔒 Tor Geh Fix"
+          callback_data: tor_geh_fix
+          automation: automation.trigger_tor_geh_fix
+          response: "✅ Tor Geh Fix wird ausgelöst..."
+      - - label: "🚗 Tor Auto"
+          callback_data: tor_auto
+          automation: automation.trigger_tor_auto
+          response: "✅ Tor Auto wird ausgelöst..."
+      - - label: "🔧 Tor Auto Fix"
+          callback_data: tor_auto_fix
+          automation: automation.trigger_tor_auto_fix
+          response: "✅ Tor Auto Fix wird ausgelöst..."
+
+  "🏊 Pool-Steuerung":
+    title: "🏊 Pool-Steuerung:"
+    rows:
+      - - label: "💧 Pump ON"
+          callback_data: pool_pump_on
+          automation: automation.trigger_pool_pump_on
+          response: "✅ Pool-Pumpe EIN"
+      - - label: "💧 Pump OFF"
+          callback_data: pool_pump_off
+          automation: automation.trigger_pool_pump_off
+          response: "✅ Pool-Pumpe AUS"
+      - - label: "🔥 Heat Pool"
+          callback_data: pool_heat_on
+          automation: automation.trigger_pool_heat_pump_on
+          response: "🔥 Pool-Heizung EIN"
+      - - label: "❄️ Heat OFF"
+          callback_data: pool_heat_off
+          automation: automation.trigger_pool_heat_pump_off
+          response: "❄️ Pool-Heizung AUS"
+
+  "🔋 Batterie prüfen":
+    action: check_battery
+
+battery_notification_menu:
+  rows:
+    - - label: "🔥 Heat Pool"
+        callback_data: battery_heat_pool
+        automation: automation.trigger_pool_heat_pump_on
+        response: "🔥 Pool-Heizung wurde eingeschaltet."
+    - - label: "❌ Ignore"
+        callback_data: battery_ignore
+        response: "Benachrichtigung ignoriert."
