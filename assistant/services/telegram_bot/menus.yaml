@@ -6,11 +6,19 @@
 #   main_menu.layout  — rows of persistent reply-keyboard buttons
 #   menus             — per-button config: either a submenu (rows) or a special action
 #   battery_notification_menu — inline buttons shown with battery alerts
+#
+# Each inline button supports two ways to call Home Assistant:
+#   automation: automation.your_automation_id        — triggers an automation
+#   service: light.turn_on                           — calls any HA service directly
+#   entity_id: light.wohnzimmer                     — required when using service
+#
+# Submenu titles support live HA state placeholders:
+#   title: "Batterie: {sensor.my_battery}%"         — replaced with current HA state at runtime
 
 main_menu:
   layout:
     - ["🚪 TOR-Steuerung", "🏊 Pool-Steuerung"]
-    - ["🔋 Batterie prüfen"]
+    - ["🪟 Rollo-Steuerung", "🔋 Batterie prüfen"]
 
 menus:
   "🚪 TOR-Steuerung":
@@ -53,15 +61,47 @@ menus:
           automation: automation.trigger_pool_heat_pump_off
           response: "❄️ Pool-Heizung AUS"
 
-  "🔋 Batterie prüfen":
-    action: check_battery
+  "🪟 Rollo-Steuerung":
+    title: "🪟 Rollo-Steuerung:"
+    rows:
+      - - label: "⬇️ Alle AB"
+          callback_data: rollo_alle_ab
+          service: switch.turn_on
+          entity_id: switch.alle_rollos_ab
+          response: "✅ Alle Rollos fahren AB"
+        - label: "⬆️ Alle AUF"
+          callback_data: rollo_alle_auf
+          service: switch.turn_on
+          entity_id: switch.alle_rollos_auf
+          response: "✅ Alle Rollos fahren AUF"
+      - - label: "⬇️ EG AB"
+          callback_data: rollo_eg_ab
+          service: switch.turn_on
+          entity_id: switch.rollo_eg_ab
+          response: "✅ Rollo EG fährt AB"
+        - label: "⬆️ EG AUF"
+          callback_data: rollo_eg_auf
+          service: switch.turn_on
+          entity_id: switch.rollo_eg_auf
+          response: "✅ Rollo EG fährt AUF"
+      - - label: "⬇️ OG AB"
+          callback_data: rollo_og_ab
+          service: switch.turn_on
+          entity_id: switch.rollo_og_ab
+          response: "✅ Rollo OG fährt AB"
+        - label: "⬆️ OG AUF"
+          callback_data: rollo_og_auf
+          service: switch.turn_on
+          entity_id: switch.rollo_og_auf
+          response: "✅ Rollo OG fährt AUF"
 
-battery_notification_menu:
-  rows:
-    - - label: "🔥 Heat Pool"
-        callback_data: battery_heat_pool
-        automation: automation.trigger_pool_heat_pump_on
-        response: "🔥 Pool-Heizung wurde eingeschaltet."
-    - - label: "❌ Ignore"
-        callback_data: battery_ignore
-        response: "Benachrichtigung ignoriert."
+  "🔋 Batterie prüfen":
+    title: "🔋 Batterie: {sensor.sn_3015651602_battery_soc_total}%\n☀️ PV-Überschuss: {sensor.sn_3015651602_metering_power_supplied} W\n\n⚡ Pool-Heizung einschalten?"
+    rows:
+      - - label: "🔥 Heat Pool"
+          callback_data: battery_heat_pool
+          automation: automation.trigger_pool_heat_pump_on
+          response: "🔥 Pool-Heizung wurde eingeschaltet."
+      - - label: "❌ Ignore"
+          callback_data: battery_ignore
+          response: "Benachrichtigung ignoriert."

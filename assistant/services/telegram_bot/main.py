@@ -17,7 +17,6 @@ from telegram.ext import (
 
 from core.config import BOT_TOKEN
 from bot.menu import startup_menu
-from bot.battery import check_battery
 from bot.handlers import handle_voice, handle_text, handle_rag_rebuild
 from bot.callbacks import start, handle_main_menu_selection, zurueck_hauptmenue_callback, action_callback
 from bot import menu_config
@@ -39,7 +38,6 @@ def main():
     app = Application.builder().token(BOT_TOKEN).post_init(startup_menu).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("check_battery", check_battery))
     app.add_handler(CommandHandler("rag_rebuild", handle_rag_rebuild))
 
     app.add_handler(MessageHandler(filters.Regex(main_menu_pattern), handle_main_menu_selection))

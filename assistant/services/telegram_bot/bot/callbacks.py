@@ -1,18 +1,21 @@
 import logging
+import re
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from core.ha import trigger_automation
+from core.ha import trigger_automation, call_service, get_ha_state
 from bot.menu import get_main_menu_keyboard, send_main_menu, save_bot_message, delete_last_bot_message
-from bot.battery import check_battery
 from bot import menu_config
 
 logger = logging.getLogger(__name__)
 
-_SPECIAL_ACTIONS = {
-    "check_battery": check_battery,
-}
+
+def _resolve_title(title: str) -> str:
+    for entity_id in re.findall(r'\{([^}]+)\}', title):
+        value = get_ha_state(entity_id) or "?"
+        title = title.replace(f"{{{entity_id}}}", value)
+    return title
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -22,12 +25,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def _show_submenu(update: Update, context: ContextTypes.DEFAULT_TYPE, label: str):
     menu = menu_config.get_menu(label)
+    title = _resolve_title(menu["title"])
     keyboard = [
         [InlineKeyboardButton(btn["label"], callback_data=btn["callback_data"]) for btn in row]
         for row in menu["rows"]
     ]
     keyboard.append([InlineKeyboardButton("⬅️ Zurück", callback_data="zurueck_hauptmenue")])
-    msg = await update.message.reply_text(menu["title"], reply_markup=InlineKeyboardMarkup(keyboard))
+    msg = await update.message.reply_text(title, reply_markup=InlineKeyboardMarkup(keyboard))
     await save_bot_message(context, msg)
 
 
@@ -40,11 +44,7 @@ async def handle_main_menu_selection(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text("Bitte nutze die Buttons im Hauptmenü.")
         return
 
-    if "action" in menu:
-        action_fn = _SPECIAL_ACTIONS.get(menu["action"])
-        if action_fn:
-            await action_fn(update, context)
-    elif "rows" in menu:
+    if "rows" in menu:
         await _show_submenu(update, context, label)
 
 
@@ -74,6 +74,9 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if "automation" in btn:
         trigger_automation(btn["automation"])
+    elif "service" in btn:
+        domain, action = btn["service"].split(".", 1)
+        call_service(domain, action, btn["entity_id"])
 
     await query.edit_message_text(btn.get("response", "✅ Ausgeführt."))
     context.user_data["last_bot_msg_id"] = query.message.message_id

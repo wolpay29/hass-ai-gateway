@@ -47,9 +47,6 @@ def get_all_action_buttons() -> dict[str, dict]:
 
 
 
-def get_battery_notification_rows() -> list[list[dict]]:
-    return _cfg().get("battery_notification_menu", {}).get("rows", [])
-
 
 def get_main_menu_label_pattern() -> str:
     labels = list(_cfg()["menus"].keys())

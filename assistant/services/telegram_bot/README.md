@@ -4,10 +4,9 @@ Telegram bot for Home Assistant control with menu-based actions, battery monitor
 
 ## What it does
 
-- Shows a persistent Telegram main menu with submenus for gate and pool control.
-- Reads the current battery SOC and PV surplus from Home Assistant.
-- Sends a notification when the battery level is above a configured threshold.
-- Lets you quickly turn on the pool heating with a button via Home Assistant automations.
+- Shows a persistent Telegram main menu with fully configurable submenus — defined entirely in `menus.yaml`, no code changes needed.
+- Supports any Home Assistant action per button: trigger an automation, call any HA service (lights, switches, covers, …), or display live sensor values in the submenu title.
+- On-demand battery status check with inline action buttons.
 - Downloads Telegram voice messages and transcribes them (local Faster Whisper or external API).
 - Accepts free-form voice/text commands and routes them to Home Assistant via an LLM (LM Studio).
 - Optional **RAG mode**: indexes all HA entities in a local sqlite-vec DB and uses semantic retrieval instead of sending the full entity list to the LLM on every request.
@@ -16,32 +15,108 @@ Telegram bot for Home Assistant control with menu-based actions, battery monitor
 
 ## Key files
 
-- `telegram_ha_bot.py`  
-  Main bot code.
+- `main.py`  
+  Bot entry point — registers all handlers dynamically from `menus.yaml`.
 
-- `bot/voice.py`  
-  Voice download directory handling and Faster Whisper transcription.
+- `menus.yaml`  
+  **All menu configuration lives here.** Defines the main keyboard layout, submenus, inline buttons, HA automations/services, and response texts. Edit this file to add/change/remove any button — no Python changes needed.
 
-- `bot/config.py`  
-  Loads environment variables and application settings.
+- `bot/menu_config.py`  
+  Loads and parses `menus.yaml`; provides helpers used by the rest of the bot.
 
-- `bot/handlers.py` / `bot/llm.py`  
-  Command dispatch, conversation history, RAG enrichment, LLM calls, fallback routing.
+- `bot/menu.py`  
+  Persistent reply-keyboard helpers and startup menu.
 
-- `bot/rag/`  
-  RAG subsystem: `embeddings.py` (HTTP client), `store.py` (sqlite-vec wrapper), `index.py` (build/query). See [bot/rag/README.md](bot/rag/README.md) for embedding-model install.
+- `bot/callbacks.py`  
+  Generic menu/callback handlers. A single `action_callback` handles all YAML-defined inline buttons; `_resolve_title()` substitutes `{entity_id}` placeholders with live HA state.
 
-- `bot/entities.yaml`  
+- `bot/handlers.py`  
+  Voice and text command dispatch (Whisper transcription, LLM routing, RAG enrichment).
+
+- `core/ha.py`  
+  Home Assistant REST client — `call_service`, `trigger_automation`, `get_ha_state`, `get_all_states`.
+
+- `core/config.py`  
+  Loads all environment variables and application settings.
+
+- `core/rag/`  
+  RAG subsystem: `embeddings.py` (HTTP client), `store.py` (sqlite-vec wrapper), `index.py` (build/query). See the RAG section below for details.
+
+- `core/entities.yaml`  
   Curated entity whitelist — keywords, descriptions, per-entity action overrides, free-text meta hints.
 
 - `.env`  
-  Config values (bot token, chat ID, HA URL, HA token, thresholds, Whisper settings). Not committed.
+  Config values (bot token, chat ID, HA URL, HA token, Whisper settings). Not committed.
 
 - `requirements.txt`  
-  Python dependencies (`python-telegram-bot[job-queue]`, `requests`, `python-dotenv`, `faster-whisper`).
+  Python dependencies (`python-telegram-bot[job-queue]`, `requests`, `python-dotenv`, `faster-whisper`, `pyyaml`).
 
 - `systemd/telegram-bot.service`  
   Example systemd service file; can be copied to `/etc/systemd/system/`.
+
+## Menu configuration
+
+All menus are defined in `menus.yaml`. Restart the bot after editing for changes to take effect.
+
+### Adding a submenu
+
+Add the button label to `main_menu.layout` and a matching entry under `menus`:
+
+```yaml
+main_menu:
+  layout:
+    - ["🚪 TOR-Steuerung", "🏊 Pool-Steuerung"]
+    - ["💡 Lights", "🔋 Batterie prüfen"]   # ← add label here
+
+menus:
+  "💡 Lights":
+    title: "💡 Lichter steuern:"
+    rows:
+      - - label: "💡 Wohnzimmer AN"
+          callback_data: light_wz_on        # unique ID — can be anything
+          service: light.turn_on            # any HA service (domain.action)
+          entity_id: light.wohnzimmer
+          response: "✅ Licht EIN"
+      - - label: "💡 Wohnzimmer AUS"
+          callback_data: light_wz_off
+          service: light.turn_off
+          entity_id: light.wohnzimmer
+          response: "✅ Licht AUS"
+```
+
+### Triggering an automation instead of a service
+
+```yaml
+        callback_data: pool_pump_on
+        automation: automation.trigger_pool_pump_on   # ← use automation instead of service/entity_id
+        response: "✅ Pool-Pumpe EIN"
+```
+
+### Live HA state in the submenu title
+
+Use `{entity_id}` placeholders — they are resolved to the current HA state at the moment the submenu is opened:
+
+```yaml
+  "🔋 Batterie prüfen":
+    title: "🔋 Batterie: {sensor.my_battery_soc}%\n☀️ PV: {sensor.pv_surplus} W"
+    rows: ...
+```
+
+### Button layout
+
+Each entry under `rows` is a list of buttons on that row. Put multiple buttons in one row by adding them to the same list:
+
+```yaml
+    rows:
+      - - label: "⬇️ AB"         # row 1, button 1
+          callback_data: rollo_ab
+          ...
+        - label: "⬆️ AUF"        # row 1, button 2
+          callback_data: rollo_auf
+          ...
+      - - label: "⬇️ EG AB"      # row 2, button 1
+          ...
+```
 
 ## Requirements
 
@@ -480,8 +555,6 @@ Rebuild after adding new HA devices, editing `entities.yaml`, or switching embed
 | `BOT_TOKEN` | — | Telegram bot token |
 | `MY_CHAT_ID` | — | Numeric Telegram chat ID for notifications |
 | `HA_URL` / `HA_TOKEN` | — | Home Assistant URL and long-lived token |
-| `CHECK_INTERVAL_SECONDS` | `300` | Battery-check interval |
-| `BATTERY_THRESHOLD` | `80` | Notify when battery SOC ≥ this value |
 
 ### Whisper (voice transcription)
 
@@ -628,6 +701,14 @@ Every request is tagged so you can trace which path served it:
 - `[LLM Step2]` — natural-language reply generation for `get_state` queries.
 
 ## Changelog
+
+### v0.5.0 (2026-04-26)
+
+- **YAML-driven menus**: all inline buttons, submenus, HA automations/services, and response texts are now defined in `menus.yaml` — no Python changes needed to add or change any button.
+- Buttons support two HA call types: `automation` (trigger an automation) or `service` + `entity_id` (call any HA service directly — lights, switches, covers, etc.).
+- Submenu titles support `{entity_id}` placeholders resolved to live HA state at open time — enables state-displaying menus without custom code.
+- Removed periodic battery polling and automatic battery notification; manual battery check via the main menu button is retained.
+- Removed `battery.py`; all battery logic is now fully handled by `menus.yaml` + the generic callback handler.
 
 ### v0.4.0 (2026-04-23)
 
