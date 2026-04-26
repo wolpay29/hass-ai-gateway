@@ -37,6 +37,7 @@ Telegram share the same history. Use any other string and it gets hashed into
 a separate history space.
 """
 import os
+import re
 import sys
 import logging
 import tempfile
@@ -128,6 +129,37 @@ def _telegram_push(device_id: str, transcript: str, result: dict) -> None:
         logger.warning(f"[Gateway] Telegram push failed: {e}")
 
 
+_UNIT_SUBS: list[tuple[str, str]] = [
+    # Order matters: longer/more-specific patterns first
+    (r"µg/m³",      "Mikrogramm pro Kubikmeter"),
+    (r"mg/m³",      "Milligramm pro Kubikmeter"),
+    (r"m³",         "Kubikmeter"),
+    (r"km/h",       "Kilometer pro Stunde"),
+    (r"m/s",        "Meter pro Sekunde"),
+    (r"°C",         "Grad Celsius"),
+    (r"°F",         "Grad Fahrenheit"),
+    (r"kWh",        "Kilowattstunden"),
+    (r"Wh",         "Wattstunden"),
+    (r"kW",         "Kilowatt"),
+    (r"\bW\b",      "Watt"),
+    (r"hPa",        "Hektopascal"),
+    (r"mbar",       "Millibar"),
+    (r"\blx\b",     "Lux"),
+    (r"\bV\b",      "Volt"),
+    (r"\bA\b",      "Ampere"),
+    (r"\bdB\b",     "Dezibel"),
+    (r"ppm",        "ppm"),
+    (r"\bL\b",      "Liter"),
+    (r"%",          "Prozent"),
+]
+
+
+def _normalize_for_tts(text: str) -> str:
+    for pattern, replacement in _UNIT_SUBS:
+        text = re.sub(pattern, replacement, text)
+    return text
+
+
 def _tts_to_wav(text: str) -> bytes | None:
     """Call external TTS server and return WAV bytes, or None on failure."""
     if not TTS_EXTERNAL_URL or not text:
@@ -157,7 +189,7 @@ def _reply_or_wav(result: dict, tts: bool) -> Response | JSONResponse:
     elif result.get("error"):
         reply_text = f"Fehler: {result['error']}"
 
-    wav = _tts_to_wav(reply_text)
+    wav = _tts_to_wav(_normalize_for_tts(reply_text))
     if wav:
         return Response(content=wav, media_type="audio/wav")
 
