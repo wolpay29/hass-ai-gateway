@@ -87,6 +87,63 @@ rag_parser: |-
     Anfrage: "mach das licht bei max und paul an"
     -> Zwei actions zurueckgeben, keine Rueckfrage.
 
+  Plural / "alle"-Regel (sehr wichtig):
+  Eine pluralische Formulierung allein ("die Rollos", "die Lichter",
+  "die Fenster") ist KEINE Erlaubnis, alle passenden Entities gleichzeitig
+  zu schalten. Fuehre nur dann mehrere Entities gleichzeitig aus, wenn der
+  Nutzer:
+    a) sie explizit einzeln nennt ("Rollo Paul und Rollo Max"), ODER
+    b) ein eindeutiges Allquantor-Wort verwendet ("alle", "saemtliche",
+       "ueberall", "im ganzen Haus", "alle im Erdgeschoss"), ODER
+    c) einen klar abgegrenzten Bereich nennt, der genau diese Entities
+       umfasst ("die Rollos in der Kueche" wenn es genau dort welche gibt).
+
+  Sonst (z.B. "mach die Rollos zu", "Licht aus", "Fenster zu" ohne weitere
+  Angabe): KEINE actions, sondern clarification_question stellen.
+
+  Beispiel — pluralisch, aber nicht "alle":
+    Anfrage: "kannst du die rollos zumachen"
+    Kandidaten: Rollo Paul, Rollo Max, Rollo Wohnzimmer, ...
+    -> {{"reply":"", "actions":[], "clarification_question":"Welche Rollos soll ich zumachen — Paul, Max, Wohnzimmer, oder alle?"}}
+
+  Beispiel — explizites "alle":
+    Anfrage: "mach alle rollos zu"
+    Kandidaten enthalten KEIN passendes Gruppen-Entity, das alle Rollos
+    auf einmal schaltet.
+    -> Mehrere actions zurueckgeben (eine pro Rollo), keine Rueckfrage.
+
+  Gruppen-/Sammel-Entities bevorzugen (sehr wichtig):
+  Manche Entities steuern bereits eine ganze Gruppe auf einmal (z.B. ein
+  Entity wie "Alle Lichter Erdgeschoss ausschalten" oder "Alle Rollos OG
+  hoch"). Solche Entities erkennst du an Beschreibung / friendly_name /
+  note ("alle ...", "Gruppe", "alle im Keller", ...).
+
+  Wenn der Bereich, den der Nutzer meint, GENAU einem solchen Gruppen-Entity
+  entspricht, waehle NUR dieses eine Entity — fan NICHT zusaetzlich auf
+  die Einzel-Entities aus.
+
+  Beispiel — Gruppe trifft genau:
+    Anfrage: "mach alle lichter im erdgeschoss aus"
+    Kandidaten enthalten u.a. "Alle Lichter Erdgeschoss ausschalten".
+    -> Genau eine action auf dieses Gruppen-Entity. KEINE zusaetzlichen
+       Einzelaktionen.
+
+  Beispiel — Gruppe trifft NICHT genau:
+    Anfrage: "mach alle lichter im haus aus"
+    Es gibt zwar "Alle Lichter Erdgeschoss aus", "Alle Lichter Keller aus",
+    "Alle Lichter Obergeschoss aus", aber kein einzelnes Haus-Entity.
+    -> Drei actions auf die drei Etagen-Gruppen-Entities (eine pro Etage).
+       Nicht auf die einzelnen Lichter ausfaechern.
+
+  Beispiel — Gruppe existiert nur fuer eine Richtung:
+    Anfrage: "mach alle lichter im erdgeschoss an"
+    Es gibt nur "Alle Lichter Erdgeschoss AUSschalten", aber keine
+    Einschalt-Gruppe (siehe note der Entity).
+    -> Entweder Einzelaktionen (eine pro EG-Licht) ausfuehren, ODER
+       clarification_question stellen, wenn unklar welche EG-Lichter
+       gemeint sind. Niemals das Aus-Gruppen-Entity zum Einschalten
+       missbrauchen.
+
   Spezialfall "needs_fallback":
   Wenn der Nutzer eine Aktion mit Parametern verlangt, die nicht direkt ausfuehrbar
   ist (Temperatur setzen, Helligkeit, Rollo-Position, Modus, Prozent-Abfragen auf

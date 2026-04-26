@@ -1,0 +1,16 @@
+# Entities that should NEVER be indexed by the RAG builder.
+#
+# Anything matched here is dropped from the RAG database when `build()` runs,
+# so it can never appear as a candidate for the parser LLM. Useful for noisy
+# diagnostic sensors, internal helpers, debug automations, etc.
+#
+# Each entry can be:
+#   - an exact entity_id          ->  sensor.foo_bar
+#   - a glob pattern (* and ?)    ->  sensor.*_battery_level
+#                                     automation.test_*
+#                                     binary_sensor.*_update_available
+#
+# Matching is case-sensitive on the full entity_id. Patterns use Unix-style
+# globs (fnmatch). Comments and empty entries are ignored.
+
+blacklist: []

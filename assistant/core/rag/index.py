@@ -1,3 +1,4 @@
+import fnmatch
 import logging
 from pathlib import Path
 
@@ -52,6 +53,24 @@ def _load_yaml_curated() -> dict:
     path = Path(__file__).parent.parent / "entities.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     return {e["id"]: e for e in (data or {}).get("entities", [])}
+
+
+def _load_blacklist() -> list[str]:
+    """Return the list of entity_id patterns from entities_blacklist.yaml.
+
+    Each pattern is either an exact entity_id or a Unix-style glob (fnmatch).
+    Missing file or empty list -> no entities excluded.
+    """
+    path = Path(__file__).parent.parent / "entities_blacklist.yaml"
+    if not path.exists():
+        return []
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    raw = data.get("blacklist") or []
+    return [str(p).strip() for p in raw if p and str(p).strip()]
+
+
+def _is_blacklisted(entity_id: str, patterns: list[str]) -> bool:
+    return any(fnmatch.fnmatchcase(entity_id, p) for p in patterns)
 
 
 def _fetch_ha_states() -> list[dict]:
@@ -135,14 +154,24 @@ def build() -> int:
     logger.info("[RAG Index] Starte Rebuild ...")
 
     curated = _load_yaml_curated()
+    blacklist = _load_blacklist()
     ha_entities = _fetch_ha_states()
     if not ha_entities:
         logger.error("[RAG Index] Keine Entities von HA erhalten")
         return 0
 
+    excluded = [e for e in ha_entities if _is_blacklisted(e["entity_id"], blacklist)]
+    if excluded:
+        logger.info(
+            f"[RAG Index] Blacklist filtert {len(excluded)} Entities raus "
+            f"(z.B. {[e['entity_id'] for e in excluded[:5]]})"
+        )
+        ha_entities = [e for e in ha_entities if not _is_blacklisted(e["entity_id"], blacklist)]
+
     logger.info(
         f"[RAG Index] {len(ha_entities)} Entities von HA | "
-        f"{len(curated)} kurierte Eintraege aus entities.yaml"
+        f"{len(curated)} kurierte Eintraege aus entities.yaml | "
+        f"{len(blacklist)} Blacklist-Pattern"
     )
 
     records = []
