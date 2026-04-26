@@ -17,6 +17,42 @@ logger = logging.getLogger(__name__)
 _history: dict[int, list] = {}
 
 
+def _extract_json(text: str) -> dict | None:
+    """JSON aus dem LLM-Output extrahieren.
+
+    Versucht zuerst normales Matching. Falls die schließende } fehlt (Modell-Bug,
+    finish_reason=stop aber unvollständiges JSON), werden fehlende } aufgefüllt.
+    """
+    # Normalfall: vollständiges {…}
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+
+    # Repair: { ohne schließendes } — fehlende Klammern auffüllen
+    start = text.find('{')
+    if start == -1:
+        return None
+    fragment = text[start:]
+    depth = 0
+    for ch in fragment:
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+    if depth > 0:
+        repaired = fragment + '}' * depth
+        try:
+            result = json.loads(repaired)
+            logger.warning(f"[LLM] JSON repariert ({depth} fehlende '}}') — Modell hat JSON nicht abgeschlossen")
+            return result
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
 def _lmstudio_headers() -> dict:
     """Standard-Header fuer LM Studio /v1-Calls. Fuegt Bearer-Token an,
     wenn LM Studio Server-Auth aktiv ist (sobald MCP genutzt wird Pflicht)."""
@@ -93,12 +129,10 @@ def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
 
         logger.info(f"[LLM] Antwort raw: {content}")
 
-        match = re.search(r'\{.*\}', content, re.DOTALL)
-        if not match:
+        result = _extract_json(content)
+        if result is None:
             logger.error("[LLM] Kein JSON gefunden")
             return None
-
-        result = json.loads(match.group())
         logger.info(f"[LLM] Parsed: {result}")
 
         # Alle entity_ids gegen entities.yaml validieren.
@@ -416,12 +450,10 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
         content = response.json()["choices"][0]["message"]["content"]
         logger.info(f"[LLM RAG] Antwort raw: {content}")
 
-        match = re.search(r'\{.*\}', content, re.DOTALL)
-        if not match:
+        result = _extract_json(content)
+        if result is None:
             logger.error("[LLM RAG] Kein JSON gefunden")
             return None
-
-        result = json.loads(match.group())
 
         clarification_q = (result.get("clarification_question") or "").strip()
         if clarification_q:
@@ -528,12 +560,10 @@ def parse_command_with_states(transcript: str, states: list[dict], chat_id: int 
         content = response.json()["choices"][0]["message"]["content"]
         logger.info(f"[LLM Fallback REST] Antwort raw: {content}")
 
-        match = re.search(r'\{.*\}', content, re.DOTALL)
-        if not match:
+        result = _extract_json(content)
+        if result is None:
             logger.error("[LLM Fallback REST] Kein JSON gefunden")
             return None
-
-        result = json.loads(match.group())
 
         validated: list[dict] = []
         for act in result.get("actions", []):
