@@ -1,6 +1,6 @@
 # RAG Mode – Installation & Connection Verification
 
-This file only covers how to **install** the embedding model and **verify** that the embedding endpoint responds. For architecture, workflow, examples, config reference and history behaviour, see the main bot [README](../../README.md#rag-mode).
+This file only covers how to **install** the embedding model and **verify** that the embedding endpoint responds. For architecture, workflow, examples, config reference and history behaviour, see [OVERVIEW.md](../../../../OVERVIEW.md).
 
 ---
 
@@ -92,4 +92,4 @@ Rebuilding is upsert-based — existing rows are updated in place.
 
 ---
 
-For everything else (how the workflow works, DB-entry examples, per-entity metadata, LLM prompt format, conversation history, full config reference) — see the main bot [README](../../README.md#rag-mode).
+For everything else (how the workflow works, DB-entry examples, per-entity metadata, LLM prompt format, conversation history, full config reference) — see [OVERVIEW.md](../../../../OVERVIEW.md).

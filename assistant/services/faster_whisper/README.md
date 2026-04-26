@@ -74,4 +74,4 @@ The Telegram bot and Voice Gateway point to this service via the `.env` variable
 WHISPER_BACKEND=http://localhost:10300
 ```
 
-See [voice_gateway/README.md](../voice_gateway/README.md) and [telegram_bot/README.md](../telegram_bot/README.md) for full configuration details.
+See [voice_gateway/README.md](../voice_gateway/README.md) and [OVERVIEW.md](../../../OVERVIEW.md) for full configuration details.
