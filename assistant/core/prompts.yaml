@@ -51,6 +51,14 @@ rag_parser: |-
   Kein Treffer:
   {{"reply":"...", "actions":[]}}
 
+  Rueckfrage bei Unsicherheit:
+  Wenn du dir nicht sicher bist, ob du die Anfrage des Nutzers mit den oben
+  gelisteten Kandidaten wirklich so ausfuehren kannst wie er es meint, frag
+  lieber nach. Gib dann KEINE actions zurueck und setze stattdessen das Feld
+  "clarification_question" mit einer passenden, kurzen deutschen Rueckfrage
+  basierend auf dem Kontext. Format:
+  {{"reply":"...", "actions":[], "clarification_question":"..."}}
+
   Spezialfall "needs_fallback":
   Wenn der Nutzer eine Aktion mit Parametern verlangt, die nicht direkt ausfuehrbar
   ist (Temperatur setzen, Helligkeit, Rollo-Position, Modus, Prozent-Abfragen auf

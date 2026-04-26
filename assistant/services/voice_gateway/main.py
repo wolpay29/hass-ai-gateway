@@ -101,21 +101,29 @@ def _telegram_push(device_id: str, transcript: str, result: dict) -> None:
     if not GATEWAY_TELEGRAM_PUSH or not BOT_TOKEN or not MY_CHAT_ID:
         return
 
-    lines = [f"🎙️ *{device_id}*: {transcript}"]
+    def _esc(s: str) -> str:
+        """Escape MarkdownV2 special characters."""
+        for ch in r"\_*[]()~`>#+-=|{}.!":
+            s = s.replace(ch, f"\\{ch}")
+        return s
+
+    lines = [f"🎙️ *{_esc(device_id)}*: {_esc(transcript)}"]
     if result.get("reply"):
-        lines.append(f"💬 {result['reply']}")
+        lines.append(f"💬 {_esc(result['reply'])}")
     for a in result.get("actions_executed", []):
         icon = "✅" if a.get("success") else "❌"
         lines.append(f"{icon} `{a['action']}` → `{a['entity_id']}`")
     if result.get("error"):
-        lines.append(f"⚠️ error: {result['error']}")
+        lines.append(f"⚠️ error: {_esc(result['error'])}")
 
     try:
-        requests.post(
+        resp = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            json={"chat_id": MY_CHAT_ID, "text": "\n".join(lines), "parse_mode": "Markdown"},
+            json={"chat_id": MY_CHAT_ID, "text": "\n".join(lines), "parse_mode": "MarkdownV2"},
             timeout=10,
         )
+        if not resp.ok:
+            logger.warning(f"[Gateway] Telegram push failed: {resp.status_code} {resp.text}")
     except Exception as e:
         logger.warning(f"[Gateway] Telegram push failed: {e}")
 

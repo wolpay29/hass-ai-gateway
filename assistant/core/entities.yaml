@@ -166,21 +166,21 @@ entities:
     keywords: ["kg aus", "keller alles aus", "keller licht aus"]
     actions: ["turn_off"]
     domain: light
-    meta: ""
+    meta: "Schaltet alle lichter im Keller aus, kann nur ausschalten, nicht einschalten"
 
   - id: light.licht_eg_aus
     description: "Alle Lichter Erdgeschoss ausschalten"
     keywords: ["eg aus", "erdgeschoss alles aus", "erdgeschoss licht aus"]
     actions: ["turn_off"]
     domain: light
-    meta: ""
+    meta: "Schaltet alle lichter im Erdgeschoss aus, kann nur ausschalten, nicht einschalten"
 
   - id: light.licht_og_aus
     description: "Alle Lichter Obergeschoss ausschalten"
     keywords: ["og aus", "obergeschoss alles aus", "obergeschoss licht aus"]
     actions: ["turn_off"]
     domain: light
-    meta: ""
+    meta: "Schaltet alle lichter im Obergeschoss aus, kann nur ausschalten, nicht einschalten"
 
   - id: light.licht_aussen_kg
     description: "Aussenlicht Kellergeschoss"
@@ -357,28 +357,28 @@ entities:
     keywords: ["rollos eg auf", "alle rollos eg hoch", "eg rollos auf"]
     actions: ["turn_on"]
     domain: switch
-    meta: ""
+    meta: "Steuert alle Rollos im Erdgeschoss gleichzeitig. Gut wenn der user alle Rolos im EG auf einmal hochfahren möchte"
 
   - id: switch.rollo_eg_ab
     description: "Alle Rollos Erdgeschoss runterfahren"
     keywords: ["rollos eg ab", "alle rollos eg runter", "eg rollos zu"]
     actions: ["turn_on"]
     domain: switch
-    meta: ""
+    meta: "Steuert alle Rollos im Erdgeschoss gleichzeitig. Gut wenn der user alle Rolos im EG auf einmal runterfahren möchte"
 
   - id: switch.rollo_og_auf
     description: "Alle Rollos Obergeschoss hochfahren"
     keywords: ["rollos og auf", "alle rollos og hoch", "og rollos auf"]
     actions: ["turn_on"]
     domain: switch
-    meta: ""
+    meta: "Steuert alle Rollos im Obergeschoss gleichzeitig. Gut wenn der user alle Rolos im OG auf einmal hochfahren möchte"
 
   - id: switch.rollo_og_ab
     description: "Alle Rollos Obergeschoss runterfahren"
     keywords: ["rollos og ab", "alle rollos og runter", "og rollos zu"]
     actions: ["turn_on"]
     domain: switch
-    meta: ""
+    meta: "Steuert alle Rollos im Obergeschoss gleichzeitig. Gut wenn der user alle Rolos im OG auf einmal runterfahren möchte"
 
   #==================== automations ====================
 

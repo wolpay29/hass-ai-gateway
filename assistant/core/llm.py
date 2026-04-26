@@ -364,6 +364,11 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
 
         result = json.loads(match.group())
 
+        clarification_q = (result.get("clarification_question") or "").strip()
+        if clarification_q:
+            logger.info(f"[LLM RAG] Clarification vom Parser: '{clarification_q}'")
+        result["clarification_question"] = clarification_q
+
         validated: list[dict] = []
         for act in result.get("actions", []):
             eid = act.get("entity_id")
