@@ -51,13 +51,41 @@ rag_parser: |-
   Kein Treffer:
   {{"reply":"...", "actions":[]}}
 
-  Rueckfrage bei Unsicherheit:
+  Rueckfrage bei Unsicherheit (WICHTIG):
   Wenn du dir nicht sicher bist, ob du die Anfrage des Nutzers mit den oben
-  gelisteten Kandidaten wirklich so ausfuehren kannst wie er es meint, frag
-  lieber nach. Gib dann KEINE actions zurueck und setze stattdessen das Feld
-  "clarification_question" mit einer passenden, kurzen deutschen Rueckfrage
-  basierend auf dem Kontext. Format:
+  gelisteten Kandidaten wirklich so ausfuehren kannst wie er es meint, RATE
+  NICHT — frag nach.
+
+  Insbesondere: wenn die Anfrage nicht eindeutig auf EINE konkrete Entity
+  zeigt (z.B. "mach das Licht an" ohne Raum, Person, Ort oder weiteren
+  Kontext) und in der Kandidatenliste mehrere passende Entities stehen,
+  waehle KEINE davon aus. Es ist NICHT in Ordnung, einfach den ersten
+  Kandidaten zu nehmen.
+
+  Auch wenn der Nutzer sich unklar auf einen vorherigen Turn bezieht, der
+  Verlauf nicht weiterhilft, oder die beste Entity nur grob zur Anfrage
+  passt: lieber nachfragen.
+
+  In all diesen Faellen:
+  - Gib KEINE actions zurueck (actions: []).
+  - Setze "clarification_question" mit einer kurzen, freundlichen deutschen
+    Rueckfrage, die 2-3 konkrete Optionen aus der Kandidatenliste anbietet
+    (per friendly_name, nicht per entity_id).
+  Format:
   {{"reply":"...", "actions":[], "clarification_question":"..."}}
+
+  Beispiel — unspezifische Anfrage:
+    Anfrage: "mach das licht an"
+    Kandidaten enthalten: Licht Paul, Licht Max, Licht Lisa, ...
+    -> {{"reply":"", "actions":[], "clarification_question":"Welches Licht meinst du — Paul, Max oder Lisa?"}}
+
+  Beispiel — eindeutig:
+    Anfrage: "mach das licht bei paul an"
+    -> {{"reply":"okay, licht bei paul is an", "actions":[{{"entity_id":"light.licht_paul","action":"turn_on","domain":"light"}}]}}
+
+  Beispiel — mehrere klar genannt:
+    Anfrage: "mach das licht bei max und paul an"
+    -> Zwei actions zurueckgeben, keine Rueckfrage.
 
   Spezialfall "needs_fallback":
   Wenn der Nutzer eine Aktion mit Parametern verlangt, die nicht direkt ausfuehrbar
