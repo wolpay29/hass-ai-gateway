@@ -1,0 +1,18 @@
+[Unit]
+Description=Notify Gateway — webhook dispatcher for Home Assistant notifications
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/smarthome/assistant/services/notify_gateway
+ExecStart=/root/smarthome/assistant/services/notify_gateway/notify_gateway_env/bin/python /root/smarthome/assistant/services/notify_gateway/main.py
+Environment="PATH=/root/smarthome/assistant/services/notify_gateway/notify_gateway_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

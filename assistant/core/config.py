@@ -26,6 +26,10 @@ else:
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MY_CHAT_ID = int(os.getenv("MY_CHAT_ID", "0"))
 
+# Shared secret sent as X-Api-Key by clients (RPi voice client, notify_gateway → tts).
+# Empty = no auth (LAN-only deployments).
+GATEWAY_API_KEY = os.getenv("GATEWAY_API_KEY", "")
+
 HA_URL = os.getenv("HA_URL")
 HA_TOKEN = os.getenv("HA_TOKEN")
 
