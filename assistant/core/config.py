@@ -68,6 +68,8 @@ LMSTUDIO_KEEP_ALIVE = int(os.getenv("LMSTUDIO_KEEP_ALIVE", "-1"))
 LMSTUDIO_API_KEY = os.getenv("LMSTUDIO_API_KEY", "")
 
 # Modellparameter (Quality/Geschwindigkeit)
+HA_SERVICE_TIMEOUT = int(os.getenv("HA_SERVICE_TIMEOUT", "15"))
+
 LMSTUDIO_TEMPERATURE = float(os.getenv("LMSTUDIO_TEMPERATURE", "0.1"))
 LMSTUDIO_TOP_P = float(os.getenv("LMSTUDIO_TOP_P", "0.9"))
 LMSTUDIO_TOP_K = int(os.getenv("LMSTUDIO_TOP_K", "20"))

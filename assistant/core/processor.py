@@ -281,30 +281,30 @@ def process_transcript(transcript: str, chat_id: int = 0) -> dict:
             result["actions_ignored"].append({"action": action, "entity_id": entity_id})
             continue
 
-        ok = call_service(domain, action, entity_id, service_data)
+        status = call_service(domain, action, entity_id, service_data)
         executed_entry = {
             "action": action,
             "entity_id": entity_id,
-            "success": ok,
+            "success": status == "ok",
+            "status": status,
         }
         if service_data:
             executed_entry["service_data"] = service_data
         result["actions_executed"].append(executed_entry)
 
-    # Let the LLM see what actually ran so "und wieder aus" follow-ups work
+    # Let the LLM see what actually ran (incl. success/failure) so follow-ups
+    # like "hast du es gesetzt?" korrekt beantwortet werden koennen.
     if HISTORY_APPEND_EXECUTIONS:
-        executed = []
-        for a in actions:
-            if a.get("ignored") or not a.get("action") or not a.get("entity_id"):
-                continue
-            if a.get("action") == "needs_fallback":
-                continue
+        summary_parts = []
+        for a in result["actions_executed"]:
             line = f"{a.get('action')} -> {a.get('entity_id')}"
             if isinstance(a.get("service_data"), dict) and a["service_data"]:
                 line += f" {a['service_data']}"
-            executed.append(line)
-        if executed:
-            append_execution_summary(chat_id, "ausgefuehrt: " + ", ".join(executed))
+            s = a.get("status", "ok")
+            line += " [OK]" if s == "ok" else (" [Timeout - moeglicherweise ausgefuehrt]" if s == "timeout" else " [FEHLER]")
+            summary_parts.append(line)
+        if summary_parts:
+            append_execution_summary(chat_id, "ausgefuehrt: " + ", ".join(summary_parts))
 
     result["reply"] = reply
     return result

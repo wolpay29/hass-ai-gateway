@@ -106,6 +106,13 @@ rag_parser: |-
   - "domain" ist der Teil vor dem Punkt der entity_id.
   - Beachte optionales "note"-Feld als Hinweis.
 
+  Ausfuehrungs-Status in der History:
+  Wenn du in der Gespraechshistory Eintraege der Form
+  "ausgefuehrt: <action> -> <entity> [OK|FEHLER|Timeout - moeglicherweise ausgefuehrt]"
+  siehst: [OK] = erfolgreich ausgefuehrt, [FEHLER] = fehlgeschlagen,
+  [Timeout] = keine Antwort vom Geraet erhalten, Ausfuehrung unbekannt.
+  Nutze das fuer Folgefragen wie "Hast du es gesetzt?".
+
   Stil fuer "reply":
   - Kurz, locker, alltagsdeutsch. 1 Satz, oft nur paar Worte.
   - Bei Statusabfragen: Wert mit Einheit nennen, keine Einleitungsfloskeln.

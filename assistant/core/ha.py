@@ -1,17 +1,17 @@
 import requests
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from core.config import HA_URL, HA_TOKEN
+from core.config import HA_URL, HA_TOKEN, HA_SERVICE_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
 
-def call_service(domain: str, action: str, entity_id: str, service_data: dict | None = None) -> bool:
+def call_service(domain: str, action: str, entity_id: str, service_data: dict | None = None) -> str:
+    """HA Service aufrufen. Gibt 'ok', 'timeout' oder 'error' zurueck."""
     headers = {
         "Authorization": f"Bearer {HA_TOKEN}",
         "Content-Type": "application/json"
     }
-    # Automations nutzen "trigger" statt turn_on/off
     service = "trigger" if action == "trigger" else action
     url = f"{HA_URL}/api/services/{domain}/{service}"
 
@@ -20,14 +20,17 @@ def call_service(domain: str, action: str, entity_id: str, service_data: dict | 
         body.update(service_data)
 
     try:
-        r = requests.post(url, headers=headers, json=body, timeout=10)
-        ok = r.status_code in (200, 201)
-        if not ok:
-            logger.warning(f"[HA] Service-Call {domain}.{service} {entity_id} -> {r.status_code}: {r.text[:200]}")
-        return ok
+        r = requests.post(url, headers=headers, json=body, timeout=HA_SERVICE_TIMEOUT)
+        if r.status_code in (200, 201):
+            return "ok"
+        logger.warning(f"[HA] Service-Call {domain}.{service} {entity_id} -> {r.status_code}: {r.text[:200]}")
+        return "error"
+    except requests.exceptions.Timeout:
+        logger.error(f"[HA] Timeout bei Service Call {domain}.{service} {entity_id} (>{HA_SERVICE_TIMEOUT}s)")
+        return "timeout"
     except Exception as e:
         logger.error(f"[HA] Fehler beim Service Call: {e}")
-        return False
+        return "error"
 
 
 def get_all_states(domains: list[str] | None = None, max_entities: int = 0) -> list[dict]:
@@ -85,7 +88,7 @@ def get_ha_state(entity_id: str) -> str | None:
 
 
 def trigger_automation(entity_id: str) -> bool:
-    return call_service("automation", "trigger", entity_id)
+    return call_service("automation", "trigger", entity_id) == "ok"
 
 
 def get_state(entity_id: str) -> dict | None:
