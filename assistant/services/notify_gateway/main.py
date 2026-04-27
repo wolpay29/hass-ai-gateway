@@ -16,6 +16,7 @@ Target types
               and X-Api-Key: GATEWAY_API_KEY  (delivered to a voice_gateway).
   telegram  → sendMessage to MY_CHAT_ID via Bot API using BOT_TOKEN.
 """
+import asyncio
 import logging
 import os
 import sys
@@ -98,16 +99,17 @@ async def notify(req: NotifyRequest) -> dict:
     if not req.targets:
         raise HTTPException(status_code=400, detail="targets must not be empty")
 
-    results: list[dict] = []
     async with httpx.AsyncClient() as client:
-        for t in req.targets:
+        async def _run(t: Target) -> dict:
             if t.type == "tts":
                 res = await _dispatch_tts(client, req.message, t.url or "")
             elif t.type == "telegram":
                 res = await _dispatch_telegram(client, req.message)
             else:
                 res = {"ok": False, "error": f"unknown target type: {t.type}"}
-            results.append({"type": t.type, "url": t.url, **res})
+            return {"type": t.type, "url": t.url, **res}
+
+        results = await asyncio.gather(*(_run(t) for t in req.targets))
 
     logger.info(f"dispatched message={req.message!r} results={results}")
     return {"results": results}
