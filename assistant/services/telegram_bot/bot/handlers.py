@@ -15,7 +15,7 @@ import logging
 
 from core.voice import ensure_voice_dir, transcribe_audio
 from core.config import VOICE_REPLY_WITH_TRANSCRIPT, MAX_ACTIONS_PER_COMMAND, RAG_ENABLED
-from core.processor import process_transcript
+from core.processor import process_transcript_split
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,8 @@ def _format_reply(result: dict) -> str:
     if executed:
         parts.append("")  # blank line between reply and action list
         for a in executed:
-            icon = "✅" if a["success"] else "❌"
+            status = a.get("status", "ok")
+            icon = "✅" if status == "ok" else ("⏱️❌" if status == "timeout" else "❌")
             parts.append(f"{icon} `{a['action']}` -> `{a['entity_id']}`")
 
     if ignored:
@@ -69,15 +70,42 @@ def _format_reply(result: dict) -> str:
     return text or "❓ Kein passendes Gerät gefunden."
 
 
-async def _dispatch(update, context, transcript: str):
-    """Common path: run the processor, format the result, reply to Telegram."""
-    result = process_transcript(transcript, chat_id=update.effective_chat.id)
-    answer = _format_reply(result)
-    try:
-        await update.message.reply_text(answer, parse_mode="Markdown")
-    except Exception:
-        # Fall back to plain-text if the LLM-generated reply contains bad Markdown
-        await update.message.reply_text(answer)
+async def _dispatch(update, context, transcript: str, status_msg=None):
+    """LLM reply → edit status_msg immediately; HA actions run in executor, then edit again."""
+    loop = asyncio.get_running_loop()
+    chat_id = update.effective_chat.id
+
+    partial, execute_fn = await loop.run_in_executor(
+        None, lambda: process_transcript_split(transcript, chat_id=chat_id)
+    )
+
+    early_text = partial.get("reply") or _ERROR_MESSAGES.get(partial.get("error", ""), "❓ Kein passendes Gerät gefunden.")
+
+    if status_msg:
+        try:
+            sent = await status_msg.edit_text(early_text, parse_mode="Markdown")
+        except Exception:
+            sent = await status_msg.edit_text(early_text)
+    else:
+        try:
+            sent = await update.message.reply_text(early_text, parse_mode="Markdown")
+        except Exception:
+            sent = await update.message.reply_text(early_text)
+
+    if execute_fn is None:
+        return
+
+    await loop.run_in_executor(None, execute_fn)
+
+    final_text = _format_reply(partial)
+    if final_text != early_text:
+        try:
+            await sent.edit_text(final_text, parse_mode="Markdown")
+        except Exception:
+            try:
+                await sent.edit_text(final_text)
+            except Exception:
+                pass
 
 
 async def handle_voice(update, context):
@@ -99,16 +127,16 @@ async def handle_voice(update, context):
     if VOICE_REPLY_WITH_TRANSCRIPT:
         await update.message.reply_text(f"📝 Erkannt: {transcript}")
 
-    await update.message.reply_text("🤖 Analysiere Befehl...")
-    await _dispatch(update, context, transcript)
+    status_msg = await update.message.reply_text("🤖 Analysiere Befehl...")
+    await _dispatch(update, context, transcript, status_msg=status_msg)
 
 
 async def handle_text(update, context):
     if not update.message or not update.message.text:
         return
 
-    await update.message.reply_text("🤖 Analysiere...")
-    await _dispatch(update, context, update.message.text.strip())
+    status_msg = await update.message.reply_text("🤖 Analysiere...")
+    await _dispatch(update, context, update.message.text.strip(), status_msg=status_msg)
 
 
 async def handle_rag_rebuild(update, context):

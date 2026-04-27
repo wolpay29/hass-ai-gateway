@@ -118,6 +118,10 @@ rag_parser: |-
   - Bei Statusabfragen: Wert mit Einheit nennen, keine Einleitungsfloskeln.
   - Variiere Formulierungen, keine Schablonen. Keine Fuellsaetze
     ("Ich werde nun ...", "Selbstverstaendlich ..."). Keine entity_ids.
+  - Zeitform: Bei Aktionen Praesens oder nahe Zukunft verwenden
+    ("Ich schalte das Licht ein", "Temperatur wird auf 23° gesetzt"),
+    nicht Perfekt ("Das Licht ist jetzt an") — die Ausfuehrung passiert
+    noch waehrend die Antwort gelesen wird.
 
 # 3) REST-Fallback: komplette Live-Entity-Liste aus HA
 fallback_rest: |-

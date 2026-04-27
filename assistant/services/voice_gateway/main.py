@@ -41,6 +41,7 @@ import re
 import sys
 import logging
 import tempfile
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -52,7 +53,7 @@ from pydantic import BaseModel
 
 from core.voice import transcribe_audio
 from core.config import BOT_TOKEN, MY_CHAT_ID, TTS_EXTERNAL_URL, TTS_EXTERNAL_VOICE
-from core.processor import process_transcript
+from core.processor import process_transcript_split
 
 logging.basicConfig(
     format="%(asctime)s [gateway] %(levelname)s %(message)s",
@@ -112,7 +113,8 @@ def _telegram_push(device_id: str, transcript: str, result: dict) -> None:
     if result.get("reply"):
         lines.append(f"💬 {_esc(result['reply'])}")
     for a in result.get("actions_executed", []):
-        icon = "✅" if a.get("success") else "❌"
+        status = a.get("status", "ok")
+        icon = "✅" if status == "ok" else ("⏱️❌" if status == "timeout" else "❌")
         lines.append(f"{icon} `{a['action']}` → `{a['entity_id']}`")
     if result.get("error"):
         lines.append(f"⚠️ error: {_esc(result['error'])}")
@@ -236,9 +238,19 @@ async def audio_endpoint(
         return _reply_or_wav({"transcript": "", "reply": "", "error": "no_speech"}, tts)
 
     logger.info(f"[Gateway] '{device_id}' transcript: '{transcript}'")
-    result = process_transcript(transcript, chat_id=_device_to_chat_id(device_id))
-    _telegram_push(device_id, transcript, result)
-    return _reply_or_wav(result, tts)
+    chat_id = _device_to_chat_id(device_id)
+    partial, execute_fn = process_transcript_split(transcript, chat_id=chat_id)
+
+    # Return TTS/JSON immediately with the LLM reply, run HA actions in background
+    response = _reply_or_wav(partial, tts)
+
+    def _bg():
+        if execute_fn:
+            execute_fn()
+        _telegram_push(device_id, transcript, partial)
+
+    threading.Thread(target=_bg, daemon=True).start()
+    return response
 
 
 class TextRequest(BaseModel):
@@ -260,9 +272,18 @@ def text_endpoint(
         raise HTTPException(status_code=400, detail="text must not be empty")
 
     logger.info(f"[Gateway] /text from '{body.device_id}': '{transcript}'")
-    result = process_transcript(transcript, chat_id=_device_to_chat_id(body.device_id))
-    _telegram_push(body.device_id, transcript, result)
-    return _reply_or_wav(result, body.tts)
+    chat_id = _device_to_chat_id(body.device_id)
+    partial, execute_fn = process_transcript_split(transcript, chat_id=chat_id)
+
+    response = _reply_or_wav(partial, body.tts)
+
+    def _bg():
+        if execute_fn:
+            execute_fn()
+        _telegram_push(body.device_id, transcript, partial)
+
+    threading.Thread(target=_bg, daemon=True).start()
+    return response
 
 
 # ---------------------------------------------------------------------------

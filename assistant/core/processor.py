@@ -141,26 +141,31 @@ def _new_result(transcript: str) -> dict:
     }
 
 
-def process_transcript(transcript: str, chat_id: int = 0) -> dict:
-    """
-    transcript → intent → HA actions → result dict.
+def process_transcript_split(
+    transcript: str, chat_id: int = 0
+) -> "tuple[dict, Callable[[], dict] | None]":
+    """LLM-Phase und HA-Ausführung getrennt.
 
-    chat_id is used both for the history key (see core.llm._history) and for
-    logging. Pass 0 to run without history.
+    Gibt (partial_result, execute_fn) zurück:
+    - partial_result hat `reply` bereits gesetzt (aus dem LLM), aber
+      `actions_executed` ist noch leer.
+    - execute_fn() führt die HA-Actions aus, füllt `actions_executed` und
+      gibt partial_result zurück. Darf in einem Background-Thread aufgerufen
+      werden, sobald die Antwort an den Caller gesendet wurde.
+    - execute_fn ist None wenn keine Actions ausgeführt werden müssen
+      (Smalltalk, Fehler, reine Statusantwort, MCP-Fallback).
 
-    Never raises on LLM/HA errors — those are reported via `result["error"]`.
+    process_transcript() ist ein einfacher Wrapper darüber.
     """
+    from typing import Callable  # lokaler Import vermeidet zirkulaere Abhaengigkeiten
+
     result = _new_result(transcript)
     logger.info(
         f"[Processor] chat={chat_id} | FALLBACK_MODE={FALLBACK_MODE} | "
         f"Transcript: '{transcript}'"
     )
 
-    # Snapshot the pre-call history so the REST fallback can use it without
-    # seeing the current turn that the primary path is about to append.
     history_snapshot = get_history_snapshot(chat_id)
-
-    # Rewriter (when enabled) classifies intent and produces the embed query.
     embed_query, intent = _build_embed_query(transcript, chat_id)
 
     if intent == "smalltalk":
@@ -169,39 +174,27 @@ def process_transcript(transcript: str, chat_id: int = 0) -> dict:
         result["reply"] = chat_reply or ""
         if not chat_reply:
             result["error"] = "smalltalk_failed"
-        return result
+        return result, None
 
     command = _resolve_command(transcript, embed_query, chat_id)
     if not command:
         result["error"] = "parse_failed"
-        return result
+        return result, None
 
     if command.get("_clarify"):
         result["reply"] = command["_clarify"]
-        # Originaltranscript + Rueckfrage in die History schreiben, damit der
-        # naechste Turn (Antwort auf die Rueckfrage) den urspruenglichen
-        # Action-Intent ("abschalten" etc.) noch sieht.
         append_clarification_turn(chat_id, transcript, command["_clarify"])
-        return result
+        return result, None
 
     reply = command.get("reply", "")
     actions = command.get("actions", [])
     fallback_states: list[dict] = []
 
-    # Legacy-Pfad (primary_parser) kennt noch "get_state". Im neuen Modell beantwortet
-    # der RAG-Parser Statusfragen direkt im "reply" — get_state ist obsolet. Falls er
-    # trotzdem auftaucht (Legacy oder Halluzination), zu needs_fallback umlenken,
-    # damit der REST/MCP-Fallback die Antwort mit Live-Daten generiert.
     for a in actions:
         if a.get("action") == "get_state":
             logger.info(f"[Processor] Legacy get_state '{a.get('entity_id')}' -> needs_fallback")
             a["action"] = "needs_fallback"
 
-    # -----------------------------------------------------------------------
-    # Branch A: needs_fallback — entity matched but action needs parameters
-    # (e.g. "set temp to 22", "rollo on 40%") that the curated config can't
-    # express. Route to the configured fallback mode.
-    # -----------------------------------------------------------------------
     if any(a.get("action") == "needs_fallback" for a in actions):
         if FALLBACK_MODE == 1:
             fallback_states = get_all_states(FALLBACK_REST_DOMAINS or None, FALLBACK_REST_MAX_ENTITIES)
@@ -215,22 +208,18 @@ def process_transcript(transcript: str, chat_id: int = 0) -> dict:
                 result["fallback_used"] = "rest"
             else:
                 result["error"] = "fallback_no_match"
-                return result
+                return result, None
         elif FALLBACK_MODE == 2:
             mcp_reply = fallback_via_mcp(transcript, chat_id=chat_id)
-            if mcp_reply:
-                result["reply"] = mcp_reply
-                result["fallback_used"] = "mcp"
-            else:
+            result["reply"] = mcp_reply or ""
+            result["fallback_used"] = "mcp" if mcp_reply else None
+            if not mcp_reply:
                 result["error"] = "mcp_failed"
-            return result
+            return result, None
         else:
             result["error"] = "needs_fallback_no_mode"
-            return result
+            return result, None
 
-    # -----------------------------------------------------------------------
-    # Branch B: no actions at all — primary path found nothing. Try fallbacks.
-    # -----------------------------------------------------------------------
     if not actions:
         if FALLBACK_MODE == 1:
             fallback_states = get_all_states(FALLBACK_REST_DOMAINS or None, FALLBACK_REST_MAX_ENTITIES)
@@ -245,66 +234,73 @@ def process_transcript(transcript: str, chat_id: int = 0) -> dict:
             else:
                 result["reply"] = reply
                 result["error"] = "no_match"
-                return result
+                return result, None
         elif FALLBACK_MODE == 2:
             mcp_reply = fallback_via_mcp(transcript, chat_id=chat_id)
-            if mcp_reply:
-                result["reply"] = mcp_reply
-                result["fallback_used"] = "mcp"
-            else:
+            result["reply"] = mcp_reply or ""
+            result["fallback_used"] = "mcp" if mcp_reply else None
+            if not mcp_reply:
                 result["error"] = "mcp_failed"
-            return result
+            return result, None
         else:
             result["reply"] = reply
             if not reply:
                 result["error"] = "no_match"
-            return result
+            return result, None
 
-    # -----------------------------------------------------------------------
-    # Execute HA actions. Mit States im RAG-Prompt entscheidet das LLM bereits
-    # smart und liefert ggf. service_data fuer parametrierte Aufrufe mit.
-    # Reine Statusabfragen formuliert das LLM direkt im "reply" — kein Step2.
-    # -----------------------------------------------------------------------
-    for act in actions:
-        entity_id = act.get("entity_id")
-        action = act.get("action")
-        domain = act.get("domain")
-        service_data = act.get("service_data") if isinstance(act.get("service_data"), dict) else None
-
-        # Action was dropped by MAX_ACTIONS_PER_COMMAND inside the LLM layer
-        if act.get("ignored"):
-            result["actions_ignored"].append({"action": action, "entity_id": entity_id})
-            continue
-
-        # Safety net: re-check the limit in case the LLM layer didn't apply it
-        if MAX_ACTIONS_PER_COMMAND > 0 and len(result["actions_executed"]) >= MAX_ACTIONS_PER_COMMAND:
-            result["actions_ignored"].append({"action": action, "entity_id": entity_id})
-            continue
-
-        status = call_service(domain, action, entity_id, service_data)
-        executed_entry = {
-            "action": action,
-            "entity_id": entity_id,
-            "success": status == "ok",
-            "status": status,
-        }
-        if service_data:
-            executed_entry["service_data"] = service_data
-        result["actions_executed"].append(executed_entry)
-
-    # Let the LLM see what actually ran (incl. success/failure) so follow-ups
-    # like "hast du es gesetzt?" korrekt beantwortet werden koennen.
-    if HISTORY_APPEND_EXECUTIONS:
-        summary_parts = []
-        for a in result["actions_executed"]:
-            line = f"{a.get('action')} -> {a.get('entity_id')}"
-            if isinstance(a.get("service_data"), dict) and a["service_data"]:
-                line += f" {a['service_data']}"
-            s = a.get("status", "ok")
-            line += " [OK]" if s == "ok" else (" [Timeout - moeglicherweise ausgefuehrt]" if s == "timeout" else " [FEHLER]")
-            summary_parts.append(line)
-        if summary_parts:
-            append_execution_summary(chat_id, "ausgefuehrt: " + ", ".join(summary_parts))
-
+    # Reply aus dem LLM steht fest — ab hier kann der Caller die Antwort
+    # bereits senden. Die eigentliche HA-Ausführung erfolgt in execute_fn.
     result["reply"] = reply
+
+    def execute_fn() -> dict:
+        for act in actions:
+            entity_id = act.get("entity_id")
+            action = act.get("action")
+            domain = act.get("domain")
+            service_data = act.get("service_data") if isinstance(act.get("service_data"), dict) else None
+
+            if act.get("ignored"):
+                result["actions_ignored"].append({"action": action, "entity_id": entity_id})
+                continue
+            if MAX_ACTIONS_PER_COMMAND > 0 and len(result["actions_executed"]) >= MAX_ACTIONS_PER_COMMAND:
+                result["actions_ignored"].append({"action": action, "entity_id": entity_id})
+                continue
+
+            status = call_service(domain, action, entity_id, service_data)
+            entry = {
+                "action": action,
+                "entity_id": entity_id,
+                "success": status == "ok",
+                "status": status,
+            }
+            if service_data:
+                entry["service_data"] = service_data
+            result["actions_executed"].append(entry)
+
+        if HISTORY_APPEND_EXECUTIONS:
+            parts = []
+            for a in result["actions_executed"]:
+                line = f"{a.get('action')} -> {a.get('entity_id')}"
+                if isinstance(a.get("service_data"), dict) and a["service_data"]:
+                    line += f" {a['service_data']}"
+                s = a.get("status", "ok")
+                line += " [OK]" if s == "ok" else (" [Timeout - moeglicherweise ausgefuehrt]" if s == "timeout" else " [FEHLER]")
+                parts.append(line)
+            if parts:
+                append_execution_summary(chat_id, "ausgefuehrt: " + ", ".join(parts))
+
+        return result
+
+    return result, execute_fn
+
+
+def process_transcript(transcript: str, chat_id: int = 0) -> dict:
+    """Vollständiger synchroner Ablauf — LLM + HA-Ausführung in einem Aufruf.
+
+    Für Caller die nicht splitten wollen (Tests, Legacy-Code).
+    Voice-Gateway und Telegram nutzen process_transcript_split() direkt.
+    """
+    result, execute_fn = process_transcript_split(transcript, chat_id)
+    if execute_fn:
+        execute_fn()
     return result
