@@ -1,0 +1,10 @@
+build_from:
+  aarch64: ghcr.io/home-assistant/aarch64-base-python:3.12-alpine3.19
+  amd64: ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.19
+  armv7: ghcr.io/home-assistant/armv7-base-python:3.12-alpine3.19
+labels:
+  org.opencontainers.image.title: "Smarthome Assistant"
+  org.opencontainers.image.description: "Voice + Telegram + Notify gateways for Home Assistant"
+  org.opencontainers.image.source: "https://github.com/wolpay29/smarthome"
+  org.opencontainers.image.licenses: "MIT"
+  org.opencontainers.image.authors: "Paul Wolfmajer"

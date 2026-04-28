@@ -1,0 +1,73 @@
+{
+  "services": {
+    "voice_gateway": true,
+    "notify_gateway": true,
+    "telegram_bot": true
+  },
+  "telegram": {
+    "bot_token": "REPLACE_ME",
+    "chat_id": 123456789
+  },
+  "home_assistant": {
+    "url": "http://192.168.1.10:8123",
+    "token": "REPLACE_ME",
+    "service_timeout": 15
+  },
+  "whisper": {
+    "external_url": "http://192.168.1.10:10300/v1/audio/transcriptions",
+    "external_model": "deepdml/faster-whisper-large-v3-turbo-ct2",
+    "language": "de"
+  },
+  "lmstudio": {
+    "url": "http://192.168.1.10:1234",
+    "model": "qwen2.5-7b-instruct",
+    "api_key": "",
+    "timeout": 30,
+    "temperature": 0.1,
+    "no_think": true,
+    "context_length": 8000,
+    "mcp_allowed_tools": "HassTurnOn,HassTurnOff,HassCancelAllTimers,HassBroadcast,HassClimateSetTemperature,HassLightSet,GetDateTime,GetLiveContext"
+  },
+  "voice_gateway": {
+    "port": 8765,
+    "api_key": "",
+    "telegram_push": true
+  },
+  "notify_gateway": {
+    "port": 8766,
+    "http_timeout": 10
+  },
+  "tts": {
+    "external_url": "http://192.168.1.10:10400/tts",
+    "external_voice": "de_DE-thorsten-low"
+  },
+  "rag": {
+    "enabled": false,
+    "top_k": 15,
+    "keyword_boost": 0.3,
+    "embed_url": "",
+    "embed_model": "text-embedding-nomic-embed-text-v2-moe",
+    "embed_dim": 768
+  },
+  "llm_preprocessor": {
+    "enabled": false,
+    "url": "",
+    "api_key": "",
+    "model": "",
+    "timeout": 30,
+    "temperature": 0.1
+  },
+  "fallback": {
+    "mode": 0,
+    "rest_max_entities": 0,
+    "rest_domains": "light,switch,sensor,binary_sensor,climate,automation,cover"
+  },
+  "advanced": {
+    "llm_history_size": 0,
+    "history_include_assistant": true,
+    "history_append_executions": false,
+    "max_actions_per_command": 0,
+    "voice_reply_with_transcript": true,
+    "notify_http_timeout": 10
+  }
+}

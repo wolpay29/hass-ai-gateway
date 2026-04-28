@@ -1,0 +1,147 @@
+name: Smarthome Assistant
+version: "1.0.0"
+slug: smarthome_assistant
+description: >-
+  Voice + Telegram + Notify gateways for Home Assistant.
+  Runs three Python services in one container, each individually toggleable.
+url: https://github.com/wolpay29/smarthome
+arch:
+  - aarch64
+  - amd64
+  - armv7
+init: false
+startup: services
+boot: auto
+hassio_api: false
+homeassistant_api: true
+host_network: false
+map:
+  - share:rw
+ports:
+  "8765/tcp": 8765
+  "8766/tcp": 8766
+ports_description:
+  "8765/tcp": Voice Gateway HTTP API (RPi/ESP32 audio + text)
+  "8766/tcp": Notify Gateway HTTP API (HA webhook target)
+
+options:
+  services:
+    voice_gateway: true
+    notify_gateway: true
+    telegram_bot: true
+  telegram:
+    bot_token: ""
+    chat_id: 0
+  home_assistant:
+    url: "http://supervisor/core"
+    token: ""
+    service_timeout: 15
+  whisper:
+    external_url: ""
+    external_model: "deepdml/faster-whisper-large-v3-turbo-ct2"
+    language: "de"
+  lmstudio:
+    url: ""
+    model: "qwen2.5-7b-instruct"
+    api_key: ""
+    timeout: 30
+    temperature: 0.1
+    no_think: true
+    context_length: 8000
+    mcp_allowed_tools: "HassTurnOn,HassTurnOff,HassCancelAllTimers,HassBroadcast,HassClimateSetTemperature,HassLightSet,GetDateTime,GetLiveContext"
+  voice_gateway:
+    port: 8765
+    api_key: ""
+    telegram_push: true
+  notify_gateway:
+    port: 8766
+    http_timeout: 10
+  tts:
+    external_url: ""
+    external_voice: "de_DE-thorsten-low"
+  rag:
+    enabled: false
+    top_k: 15
+    keyword_boost: 0.3
+    embed_url: ""
+    embed_model: "text-embedding-nomic-embed-text-v2-moe"
+    embed_dim: 768
+  llm_preprocessor:
+    enabled: false
+    url: ""
+    api_key: ""
+    model: ""
+    timeout: 30
+    temperature: 0.1
+  fallback:
+    mode: 0
+    rest_max_entities: 0
+    rest_domains: "light,switch,sensor,binary_sensor,climate,automation,cover"
+  advanced:
+    llm_history_size: 0
+    history_include_assistant: true
+    history_append_executions: false
+    max_actions_per_command: 0
+    voice_reply_with_transcript: true
+    notify_http_timeout: 10
+
+schema:
+  services:
+    voice_gateway: bool
+    notify_gateway: bool
+    telegram_bot: bool
+  telegram:
+    bot_token: password?
+    chat_id: int
+  home_assistant:
+    url: str
+    token: password?
+    service_timeout: int(1,300)
+  whisper:
+    external_url: str?
+    external_model: str?
+    language: str
+  lmstudio:
+    url: str?
+    model: str?
+    api_key: password?
+    timeout: int(1,600)
+    temperature: float(0,2)
+    no_think: bool
+    context_length: int(512,131072)
+    mcp_allowed_tools: str?
+  voice_gateway:
+    port: port
+    api_key: password?
+    telegram_push: bool
+  notify_gateway:
+    port: port
+    http_timeout: int(1,300)
+  tts:
+    external_url: str?
+    external_voice: str?
+  rag:
+    enabled: bool
+    top_k: int(1,100)
+    keyword_boost: float(0,5)
+    embed_url: str?
+    embed_model: str?
+    embed_dim: int(64,8192)
+  llm_preprocessor:
+    enabled: bool
+    url: str?
+    api_key: password?
+    model: str?
+    timeout: int(1,600)
+    temperature: float(0,2)
+  fallback:
+    mode: int(0,2)
+    rest_max_entities: int(0,10000)
+    rest_domains: str
+  advanced:
+    llm_history_size: int(0,100)
+    history_include_assistant: bool
+    history_append_executions: bool
+    max_actions_per_command: int(0,100)
+    voice_reply_with_transcript: bool
+    notify_http_timeout: int(1,300)

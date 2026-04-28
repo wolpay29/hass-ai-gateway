@@ -1,0 +1,13 @@
+#!/command/with-contenv bashio
+set -e
+
+if ! bashio::config.true 'services.notify_gateway'; then
+    bashio::log.info "[notify-gateway] disabled in config — sleeping"
+    exec sleep infinity
+fi
+
+source /usr/lib/smarthome-assistant/export-env.sh
+
+bashio::log.info "[notify-gateway] starting on port ${NOTIFY_PORT}"
+cd /opt/assistant/services/notify_gateway
+exec python3 main.py
