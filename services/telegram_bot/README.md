@@ -69,7 +69,7 @@ Button layout — multiple buttons per row:
 
 ### 1. Config
 
-Minimum required entries in `gateway/.env`:
+Minimum required entries in `.env`:
 
 ```ini
 BOT_TOKEN=your-telegram-bot-token
@@ -83,7 +83,7 @@ For Whisper, LLM, RAG, and fallback settings see [OVERVIEW.md](../../../OVERVIEW
 ### 2. Virtual environment
 
 ```bash
-cd gateway/services/telegram_bot
+cd services/telegram_bot
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -98,7 +98,7 @@ sudo apt update && sudo apt install -y ffmpeg
 ### 4. Run
 
 ```bash
-cd gateway/services/telegram_bot
+cd services/telegram_bot
 source venv/bin/activate
 python main.py
 ```

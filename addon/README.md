@@ -1,9 +1,9 @@
 # Hass AI Gateway Add-on
 
 Voice + Telegram + Notify gateways for Home Assistant, packaged as a single
-Supervisor add-on. Bundles three services from the
-[`gateway/`](../gateway) project into one container, each individually
-toggleable from the add-on UI.
+Supervisor add-on. Bundles three services from
+[`../services/`](../services) on top of the shared [`../core/`](../core)
+brain, each service individually toggleable from the add-on UI.
 
 ## What's inside
 
@@ -34,13 +34,13 @@ example HA `rest_command` / `notify` integrations, and troubleshooting.
 ## Whisper
 
 External Whisper only in v1.0 (`WHISPER_BACKEND` is hard-pinned to `external`).
-Run a separate Whisper server — `gateway/services/faster_whisper/` ships a
-docker-compose that does this — and point `whisper.external_url` at it.
+Run a separate Whisper server -- [`../infra/faster_whisper/`](../infra/faster_whisper)
+ships a docker-compose that does this -- and point `whisper.external_url` at it.
 A dedicated `addon_whisper` add-on may ship later.
 
 ## Source
 
-Built from [`gateway/core`](../gateway/core) and
-[`gateway/services/{voice_gateway,notify_gateway,telegram_bot}`](../gateway/services).
-No code changes are required in those folders — the add-on injects all
+Built from [`../core/`](../core) and
+[`../services/{voice_gateway,notify_gateway,telegram_bot}`](../services).
+No code changes are required in those folders -- the add-on injects all
 configuration via environment variables.

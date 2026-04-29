@@ -8,52 +8,57 @@ voice gateway, notify gateway, future web UI, etc.) is a thin adapter over it.
 ## Folder layout
 
 ```
-gateway/
-├── core/                          <- framework-agnostic command logic
-│   ├── processor.py               ── single source of truth (transcript -> actions)
-│   ├── config.py                  ── .env loader + all settings
-│   ├── llm.py                     ── LM Studio client: parse_command / parse_command_rag / …
-│   ├── llm_lmstudio.py            ── MCP fallback (Mode 2)
-│   ├── ha.py                      ── Home Assistant REST client
-│   ├── voice.py                   ── Whisper transcription (local or external)
-│   ├── entities.yaml              ── curated entity catalogue
-│   ├── entities_blacklist.yaml    ── entities excluded from RAG / LLM context
-│   ├── prompts.yaml               ── all system prompts
-│   └── rag/                       ── embeddings, sqlite-vec store, index, rewriter
+hass-ai-gateway/
+├── core/                              <- framework-agnostic command logic
+│   ├── processor.py                   -- single source of truth (transcript -> actions)
+│   ├── config.py                      -- .env loader + all settings
+│   ├── llm.py                         -- LM Studio client: parse_command / parse_command_rag / ...
+│   ├── llm_lmstudio.py                -- MCP fallback (Mode 2)
+│   ├── ha.py                          -- Home Assistant REST client
+│   ├── voice.py                       -- Whisper transcription (local or external)
+│   ├── entities.yaml                  -- curated entity catalogue
+│   ├── entities_blacklist.yaml        -- entities excluded from RAG / LLM context
+│   ├── prompts.yaml                   -- all system prompts
+│   └── rag/                           -- embeddings, sqlite-vec store, index, rewriter
 │
-├── services/
-│   ├── telegram_bot/              <- Telegram adapter
-│   │   ├── main.py                ── entry point; loads handlers from menus.yaml
-│   │   ├── menus.yaml             ── ALL button/menu config (no code change to add menus)
+├── services/                          <- adapters bundled into the HA add-on
+│   ├── telegram_bot/                  <- Telegram adapter
+│   │   ├── main.py                    -- entry point; loads handlers from menus.yaml
+│   │   ├── menus.yaml                 -- ALL button/menu config (no code change to add menus)
 │   │   └── bot/
-│   │       ├── handlers.py        ── voice/text handler -> core.processor -> Telegram Markdown
-│   │       ├── callbacks.py       ── inline-button callbacks + generic action dispatcher
-│   │       ├── menu.py            ── reply-keyboard menu helpers
-│   │       └── menu_config.py     ── menus.yaml loader
+│   │       ├── handlers.py            -- voice/text handler -> core.processor -> Telegram Markdown
+│   │       ├── callbacks.py           -- inline-button callbacks + generic action dispatcher
+│   │       ├── menu.py                -- reply-keyboard menu helpers
+│   │       └── menu_config.py         -- menus.yaml loader
 │   │
-│   ├── voice_gateway/             <- HTTP adapter for RPi / ESP32 audio clients
-│   │   ├── main.py                ── FastAPI: /audio, /text, /health
+│   ├── voice_gateway/                 <- HTTP adapter for RPi / ESP32 audio clients
+│   │   ├── main.py                    -- FastAPI: /audio, /text, /health
 │   │   └── requirements.txt
 │   │
-│   ├── notify_gateway/            <- Webhook target for HA notifications
-│   │   ├── main.py                ── FastAPI; fans out to TTS + Telegram
-│   │   └── requirements.txt
-│   │
-│   ├── faster_whisper/            <- Optional standalone Whisper STT server
-│   └── tts_server/                <- Optional standalone TTS server
-│
-├── devices/
-│   └── raspberry_pi/              <- on-device voice client
-│       ├── voice_client.py        ── openWakeWord -> record -> POST -> TTS playback
+│   └── notify_gateway/                <- webhook target for HA notifications
+│       ├── main.py                    -- FastAPI; fans out to TTS + Telegram
 │       └── requirements.txt
 │
-└── systemd/                       <- systemd unit files + install.sh for bare-metal hosts
+├── infra/                             <- standalone helper servers (run elsewhere)
+│   ├── faster_whisper/                <- optional Whisper STT server (docker-compose)
+│   └── tts_server/                    <- optional TTS server
+│
+├── clients/                           <- edge-device clients (run off-host)
+│   └── raspberry_pi/                  <- on-device voice client
+│       ├── voice_client.py            -- openWakeWord -> record -> POST -> TTS playback
+│       └── requirements.txt
+│
+├── deploy/
+│   └── systemd/                       <- systemd unit files + install.sh for bare-metal hosts
+│
+├── addon/                             <- HA Supervisor add-on packaging
+└── docs/                              <- architecture, overview, workflow
 ```
 
-The same code is also packaged as a Home Assistant Supervisor add-on — see
-[`addon/`](../addon) at the repo root. The add-on bundles `core/` + the three
-gateway services into one container; `devices/` and the standalone STT/TTS
-servers are out of scope for the add-on (they run elsewhere).
+The HA add-on bundles `core/` + the three `services/` (`voice_gateway`,
+`notify_gateway`, `telegram_bot`) into one container. `infra/`, `clients/`, and
+the systemd units in `deploy/` are out of scope for the add-on -- they're for
+running parts of the system outside the Supervisor.
 
 ## Dependency rules
 
@@ -70,11 +75,11 @@ servers are out of scope for the add-on (they run elsewhere).
                                   │ HTTP
                                   │
                      ┌────────────┴────────────┐
-                     │  devices/raspberry_pi   │  <- dumb edge device
+                     │  clients/raspberry_pi   │  <- dumb edge device
                      └─────────────────────────┘
 ```
 
-- `core/` **never** imports from `services/` or `devices/`.
+- `core/` **never** imports from `services/`, `clients/`, or `infra/`.
 - Each `services/*` adapter imports from `core/` but not from sibling adapters.
 - Devices talk to the gateway only over HTTP — no shared code.
 
@@ -90,7 +95,7 @@ and you can delete any single adapter without touching the others.
 4. `_format_reply()` turns the result dict into Markdown; sent via `reply_text`.
 
 ### Raspberry Pi voice command
-1. `devices/raspberry_pi/voice_client.py` detects the wake word with openWakeWord.
+1. `clients/raspberry_pi/voice_client.py` detects the wake word with openWakeWord.
 2. Records until silence (simple RMS-based VAD).
 3. POSTs WAV to `services/voice_gateway/main.py::/audio`.
 4. Gateway calls `core.voice.transcribe_audio`, then `core.processor.process_transcript`.
@@ -128,7 +133,7 @@ isolated history space.
 
 ## Configuration
 
-There is **one** canonical `.env`: [`gateway/.env`](../gateway/.env.example).
+There is **one** canonical `.env`: [`.env`](../.env.example).
 `core/config.py` finds it automatically (it walks up from the importing
 service). All services share every setting — Whisper backend, LM Studio URL,
 RAG settings, Telegram credentials, fallback mode, …
@@ -151,13 +156,13 @@ Gateway-only knobs (added to the same `.env`):
 
 ### Bare-metal / systemd (host install)
 
-Use the unit files and installer in [`gateway/systemd/`](../gateway/systemd):
+Use the unit files and installer in [`deploy/systemd/`](../deploy/systemd):
 
 ```bash
-sudo gateway/systemd/install.sh
+sudo deploy/systemd/install.sh
 ```
 
-That creates a venv per service under `gateway/services/<svc>/<svc>_env/`,
+That creates a venv per service under `services/<svc>/<svc>_env/`,
 copies the `.service` units to `/etc/systemd/system/`, and enables them.
 The units assume the repo lives at `/root/hass-ai-gateway/`.
 
@@ -171,11 +176,11 @@ container bundles `core/` + `services/{voice,notify}_gateway` + `telegram_bot`.
 
 ```bash
 # Telegram bot
-cd gateway/services/telegram_bot
+cd services/telegram_bot
 python main.py
 
 # Voice gateway
-cd gateway/services/voice_gateway
+cd services/voice_gateway
 pip install -r requirements.txt
 python main.py   # listens on 0.0.0.0:8765
 ```
@@ -184,11 +189,11 @@ python main.py   # listens on 0.0.0.0:8765
 
 ```bash
 # On the Pi
-cd gateway/devices/raspberry_pi
+cd clients/raspberry_pi
 sudo apt install -y portaudio19-dev espeak espeak-data libespeak-dev
 pip install -r requirements.txt
 export GATEWAY_URL="http://<ai-pc-ip>:8765"
-export GATEWAY_API_KEY="<your-key>"          # must match gateway/.env
+export GATEWAY_API_KEY="<your-key>"          # must match .env
 export DEVICE_ID="rpi-wohnzimmer"            # or your Telegram chat_id
 export WAKE_WORD="hey_jarvis"
 python voice_client.py

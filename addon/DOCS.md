@@ -70,7 +70,7 @@ whisper:
 ```
 
 Point `external_url` at any OpenAI-compatible `/v1/audio/transcriptions`
-server. The repo's `gateway/services/faster_whisper/docker-compose.yml`
+server. The repo's `infra/faster_whisper/docker-compose.yml`
 ships a working setup.
 
 ### `lmstudio`

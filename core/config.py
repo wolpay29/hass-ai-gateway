@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 # Load .env robustly regardless of the current working directory.
 # Priority:
 #   1. DOTENV_PATH env var (explicit override)
-#   2. gateway/.env  (canonical location — shared by all services)
-#   3. gateway/services/telegram_bot/.env  (legacy fallback)
+#   2. <repo>/.env  (canonical location — shared by all services)
+#   3. <repo>/services/telegram_bot/.env  (legacy fallback)
 #   4. Whatever load_dotenv() finds walking up from CWD (last resort)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _env_candidates: list[Path] = []

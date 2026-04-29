@@ -33,7 +33,7 @@ Liveness probe.
 
 ## Config
 
-Reads from `gateway/.env` via `core/config.py`:
+Reads from `.env` via `core/config.py`:
 
 | Var | Purpose |
 | --- | --- |
@@ -51,7 +51,7 @@ notify_gateway_env/bin/pip install -r requirements.txt
 notify_gateway_env/bin/python main.py
 ```
 
-Or via systemd: copy `gateway/systemd/notify-gateway.service` to
+Or via systemd: copy `deploy/systemd/notify-gateway.service` to
 `/etc/systemd/system/` and `systemctl enable --now notify-gateway`.
 
 ## HA example

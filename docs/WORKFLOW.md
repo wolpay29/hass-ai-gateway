@@ -420,17 +420,17 @@ If the power had been 18 W the parser would emit `{"actions":[{"entity_id":"swit
 
 | Path | Role |
 |---|---|
-| [gateway/services/telegram_bot/bot/handlers.py](gateway/services/telegram_bot/bot/handlers.py) | Telegram entry: text/voice handlers, message formatting |
-| [gateway/services/voice_gateway/main.py](gateway/services/voice_gateway/main.py) | FastAPI gateway for RPi/ESP32, TTS routing, Telegram receipt push |
-| [gateway/core/voice.py](gateway/core/voice.py) | Whisper STT (local + external) |
-| [gateway/core/processor.py](gateway/core/processor.py) | The shared brain — orchestrates everything |
-| [gateway/core/rag/rewriter.py](gateway/core/rag/rewriter.py) | Pre-RAG: intent classification + query normalization |
-| [gateway/core/rag/index.py](gateway/core/rag/index.py) | Build / query the entity vector index |
-| [gateway/core/rag/embeddings.py](gateway/core/rag/embeddings.py) | Embedding HTTP client (LM Studio) |
-| [gateway/core/rag/store.py](gateway/core/rag/store.py) | sqlite-vec persistence for vectors |
-| [gateway/core/llm.py](gateway/core/llm.py) | All LLM calls: parser (legacy + RAG with live states), REST fallback, smalltalk, clarification |
-| [gateway/core/llm_lmstudio.py](gateway/core/llm_lmstudio.py) | LM Studio MCP fallback (Mode 2) |
-| [gateway/core/ha.py](gateway/core/ha.py) | Home Assistant REST client (get_states_bulk, call_service with service_data, get_all_states) |
-| [gateway/core/prompts.yaml](gateway/core/prompts.yaml) | All system prompts (parser, RAG parser with state context, REST fallback, query rewriter, smalltalk) |
-| [gateway/core/entities.yaml](gateway/core/entities.yaml) | Curated entities (legacy + RAG keyword/meta source) |
-| [gateway/core/config.py](gateway/core/config.py) | All env-driven settings |
+| [services/telegram_bot/bot/handlers.py](../services/telegram_bot/bot/handlers.py) | Telegram entry: text/voice handlers, message formatting |
+| [services/voice_gateway/main.py](../services/voice_gateway/main.py) | FastAPI gateway for RPi/ESP32, TTS routing, Telegram receipt push |
+| [core/voice.py](../core/voice.py) | Whisper STT (local + external) |
+| [core/processor.py](../core/processor.py) | The shared brain — orchestrates everything |
+| [core/rag/rewriter.py](../core/rag/rewriter.py) | Pre-RAG: intent classification + query normalization |
+| [core/rag/index.py](../core/rag/index.py) | Build / query the entity vector index |
+| [core/rag/embeddings.py](../core/rag/embeddings.py) | Embedding HTTP client (LM Studio) |
+| [core/rag/store.py](../core/rag/store.py) | sqlite-vec persistence for vectors |
+| [core/llm.py](../core/llm.py) | All LLM calls: parser (legacy + RAG with live states), REST fallback, smalltalk, clarification |
+| [core/llm_lmstudio.py](../core/llm_lmstudio.py) | LM Studio MCP fallback (Mode 2) |
+| [core/ha.py](../core/ha.py) | Home Assistant REST client (get_states_bulk, call_service with service_data, get_all_states) |
+| [core/prompts.yaml](../core/prompts.yaml) | All system prompts (parser, RAG parser with state context, REST fallback, query rewriter, smalltalk) |
+| [core/entities.yaml](../core/entities.yaml) | Curated entities (legacy + RAG keyword/meta source) |
+| [core/config.py](../core/config.py) | All env-driven settings |

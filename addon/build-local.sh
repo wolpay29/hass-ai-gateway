@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stage gateway/ sources into _build/ and build the Docker image locally.
+# Stage core/ + services/ sources into _build/ and build the Docker image locally.
 #
 # Usage:
 #   ./build-local.sh           # builds amd64
@@ -17,13 +17,13 @@ case "$ARCH" in
     *) echo "[build-local] unknown arch: $ARCH (amd64|aarch64|armv7)" >&2; exit 1 ;;
 esac
 
-echo "[build-local] staging gateway sources -> $BUILD_DIR"
+echo "[build-local] staging core/ + services/ -> $BUILD_DIR"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR/services"
-cp -r "$REPO_ROOT/gateway/core"                    "$BUILD_DIR/core"
-cp -r "$REPO_ROOT/gateway/services/voice_gateway"  "$BUILD_DIR/services/voice_gateway"
-cp -r "$REPO_ROOT/gateway/services/notify_gateway" "$BUILD_DIR/services/notify_gateway"
-cp -r "$REPO_ROOT/gateway/services/telegram_bot"   "$BUILD_DIR/services/telegram_bot"
+cp -r "$REPO_ROOT/core"                    "$BUILD_DIR/core"
+cp -r "$REPO_ROOT/services/voice_gateway"  "$BUILD_DIR/services/voice_gateway"
+cp -r "$REPO_ROOT/services/notify_gateway" "$BUILD_DIR/services/notify_gateway"
+cp -r "$REPO_ROOT/services/telegram_bot"   "$BUILD_DIR/services/telegram_bot"
 
 # Strip pycache + per-service venvs that may exist from the systemd-style install.
 find "$BUILD_DIR" -type d \( -name __pycache__ -o -name '*_env' \) -prune -exec rm -rf {} + 2>/dev/null || true

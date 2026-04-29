@@ -16,8 +16,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ASSISTANT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVICES_DIR="$ASSISTANT_DIR/services"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SERVICES_DIR="$REPO_ROOT/services"
 SYSTEMD_DEST="/etc/systemd/system"
 
 # service_dir_name : systemd_unit_filename

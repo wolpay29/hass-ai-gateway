@@ -158,7 +158,7 @@ The script (`voice_client.py`) listens for a wake word, records your command, se
 > needs to play the received WAV with `aplay` — no model needed locally.
 
 Two services must be running before starting the Pi client:
-- Voice Gateway: `python gateway/services/voice_gateway/main.py`
+- Voice Gateway: `python services/voice_gateway/main.py`
 - TTS Server: see **TTS Server Setup** section below
 
 ### 1. System Packages
@@ -177,8 +177,8 @@ Run this from your PC inside the hass-ai-gateway project directory:
 ```bash
 PI_IP=<your-pi-ip>   # e.g. 192.168.1.50
 ssh pi@$PI_IP "mkdir -p ~/voice"
-scp gateway/devices/raspberry_pi/voice_client.py pi@$PI_IP:~/voice/
-scp gateway/devices/raspberry_pi/requirements.txt pi@$PI_IP:~/voice/
+scp clients/raspberry_pi/voice_client.py pi@$PI_IP:~/voice/
+scp clients/raspberry_pi/requirements.txt pi@$PI_IP:~/voice/
 ```
 
 ### 3. Create a Virtual Environment & Install Dependencies
@@ -362,7 +362,7 @@ journalctl -u voice-client -f
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `curl /health` times out | Voice Gateway not running on PC | Start `python gateway/services/voice_gateway/main.py` on your PC |
+| `curl /health` times out | Voice Gateway not running on PC | Start `python services/voice_gateway/main.py` on your PC |
 | `{"error":"no_speech"}` from gateway | Mic not capturing audio | Re-run amixer commands from Section 4 above |
 | `sounddevice.PortAudioError: Invalid device` | Wrong `ALSA_INPUT_DEVICE` card number | Run `arecord -l` to confirm the card number and update `ALSA_INPUT_DEVICE` in `.env` |
 | No audio reply from Pi | TTS server not running or wrong URL | Check `TTS_EXTERNAL_URL` in gateway `.env` and verify TTS server is up |

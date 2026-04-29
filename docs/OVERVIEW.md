@@ -26,41 +26,49 @@ Telegram button/menu actions bypass the brain entirely: they call Home Assistant
 
 ```
 hass-ai-gateway/
-├── gateway/
-│   ├── core/                          ← framework-agnostic command logic
-│   │   ├── processor.py               ── single source of truth (transcript → actions)
-│   │   ├── config.py                  ── .env loader + all settings
-│   │   ├── llm.py                     ── LM Studio client: parse_command / parse_command_rag / …
-│   │   ├── llm_lmstudio.py            ── MCP fallback (Mode 2)
-│   │   ├── ha.py                      ── Home Assistant REST client
-│   │   ├── voice.py                   ── Whisper transcription (local or external)
-│   │   ├── entities.yaml              ── curated entity catalogue
-│   │   └── rag/                       ── embeddings, sqlite-vec store, index, rewriter
-│   │
-│   ├── services/
-│   │   ├── telegram_bot/              ← Telegram adapter
-│   │   │   ├── main.py                ── entry point; registers all handlers from menus.yaml
-│   │   │   ├── menus.yaml             ── ALL button/menu config (no code needed to change menus)
-│   │   │   └── bot/
-│   │   │       ├── menu_config.py     ── loads & parses menus.yaml
-│   │   │       ├── menu.py            ── reply-keyboard helpers, startup menu
-│   │   │       ├── callbacks.py       ── menu + inline-button handlers, HA action dispatch
-│   │   │       └── handlers.py        ── voice/text → core.processor → Telegram Markdown
-│   │   │
-│   │   ├── voice_gateway/             ← HTTP adapter (FastAPI)
-│   │   │   ├── main.py                ── /audio, /text, /health endpoints
-│   │   │   └── requirements.txt
-│   │   │
-│   │   ├── faster_whisper/            ← optional external Whisper server
-│   │   └── tts_server/                ← optional TTS server
-│   │
-│   └── devices/
-│       └── raspberry_pi/              ← on-device client
-│           ├── voice_client.py        ── openWakeWord → record → POST → TTS
-│           └── requirements.txt
+├── core/                              <- framework-agnostic command logic
+│   ├── processor.py                   -- single source of truth (transcript -> actions)
+│   ├── config.py                      -- .env loader + all settings
+│   ├── llm.py                         -- LM Studio client: parse_command / parse_command_rag / ...
+│   ├── llm_lmstudio.py                -- MCP fallback (Mode 2)
+│   ├── ha.py                          -- Home Assistant REST client
+│   ├── voice.py                       -- Whisper transcription (local or external)
+│   ├── entities.yaml                  -- curated entity catalogue
+│   ├── prompts.yaml                   -- all system prompts
+│   └── rag/                           -- embeddings, sqlite-vec store, index, rewriter
 │
-├── addon/                             ← HA Supervisor add-on packaging
-└── docs/                              ← architecture, overview, workflow
+├── services/                          <- adapters bundled into the HA add-on
+│   ├── telegram_bot/                  <- Telegram adapter
+│   │   ├── main.py                    -- entry point; registers all handlers from menus.yaml
+│   │   ├── menus.yaml                 -- ALL button/menu config (no code needed to change menus)
+│   │   └── bot/
+│   │       ├── menu_config.py         -- loads & parses menus.yaml
+│   │       ├── menu.py                -- reply-keyboard helpers, startup menu
+│   │       ├── callbacks.py           -- menu + inline-button handlers, HA action dispatch
+│   │       └── handlers.py            -- voice/text -> core.processor -> Telegram Markdown
+│   │
+│   ├── voice_gateway/                 <- HTTP adapter (FastAPI) for RPi / ESP32 audio clients
+│   │   ├── main.py                    -- /audio, /text, /health endpoints
+│   │   └── requirements.txt
+│   │
+│   └── notify_gateway/                <- webhook target for HA notifications
+│       ├── main.py                    -- FastAPI; fans out to TTS + Telegram
+│       └── requirements.txt
+│
+├── infra/                             <- standalone helper servers (run elsewhere, not in addon)
+│   ├── faster_whisper/                <- optional external Whisper server (docker-compose)
+│   └── tts_server/                    <- optional external TTS server
+│
+├── clients/                           <- edge-device code (does NOT run on the gateway host)
+│   └── raspberry_pi/                  <- on-device voice client
+│       ├── voice_client.py            -- openWakeWord -> record -> POST -> TTS
+│       └── requirements.txt
+│
+├── deploy/
+│   └── systemd/                       <- unit files + install.sh for bare-metal hosts
+│
+├── addon/                             <- HA Supervisor add-on packaging
+└── docs/                              <- architecture, overview, workflow
 ```
 
 ---
@@ -436,25 +444,25 @@ Renderers:
 
 | Path | Role |
 |---|---|
-| [gateway/services/telegram_bot/main.py](gateway/services/telegram_bot/main.py) | Entry point; dynamically registers all handlers from `menus.yaml` |
-| [gateway/services/telegram_bot/menus.yaml](gateway/services/telegram_bot/menus.yaml) | All menu/button config — edit here to change any button |
-| [gateway/services/telegram_bot/bot/menu_config.py](gateway/services/telegram_bot/bot/menu_config.py) | Loads `menus.yaml`; provides helpers to the rest of the bot |
-| [gateway/services/telegram_bot/bot/callbacks.py](gateway/services/telegram_bot/bot/callbacks.py) | Menu routing, `action_callback` (generic HA dispatcher), `_resolve_title` (live state in titles) |
-| [gateway/services/telegram_bot/bot/menu.py](gateway/services/telegram_bot/bot/menu.py) | Reply-keyboard helpers, startup menu |
-| [gateway/services/telegram_bot/bot/handlers.py](gateway/services/telegram_bot/bot/handlers.py) | Telegram voice/text handlers → `core.processor` → Markdown reply |
-| [gateway/services/voice_gateway/main.py](gateway/services/voice_gateway/main.py) | FastAPI gateway for RPi/ESP32, TTS routing, Telegram receipt push |
-| [gateway/core/voice.py](gateway/core/voice.py) | Whisper STT (local + external) |
-| [gateway/core/processor.py](gateway/core/processor.py) | The shared brain — orchestrates everything |
-| [gateway/core/rag/rewriter.py](gateway/core/rag/rewriter.py) | Pre-RAG: intent classification + query normalization |
-| [gateway/core/rag/index.py](gateway/core/rag/index.py) | Build / query the entity vector index |
-| [gateway/core/rag/embeddings.py](gateway/core/rag/embeddings.py) | Embedding HTTP client |
-| [gateway/core/rag/store.py](gateway/core/rag/store.py) | sqlite-vec persistence |
-| [gateway/core/llm.py](gateway/core/llm.py) | All LLM calls: parser (legacy + RAG), state formatter, smalltalk, clarification |
-| [gateway/core/llm_lmstudio.py](gateway/core/llm_lmstudio.py) | LM Studio MCP fallback (Mode 2) |
-| [gateway/core/ha.py](gateway/core/ha.py) | Home Assistant REST client (`get_state`, `call_service`, `get_all_states`) |
-| [gateway/core/prompts.yaml](gateway/core/prompts.yaml) | All system prompts |
-| [gateway/core/entities.yaml](gateway/core/entities.yaml) | Curated entity catalogue (legacy path + RAG keyword/meta overlay) |
-| [gateway/core/config.py](gateway/core/config.py) | All env-driven settings |
+| [services/telegram_bot/main.py](../services/telegram_bot/main.py) | Entry point; dynamically registers all handlers from `menus.yaml` |
+| [services/telegram_bot/menus.yaml](../services/telegram_bot/menus.yaml) | All menu/button config — edit here to change any button |
+| [services/telegram_bot/bot/menu_config.py](../services/telegram_bot/bot/menu_config.py) | Loads `menus.yaml`; provides helpers to the rest of the bot |
+| [services/telegram_bot/bot/callbacks.py](../services/telegram_bot/bot/callbacks.py) | Menu routing, `action_callback` (generic HA dispatcher), `_resolve_title` (live state in titles) |
+| [services/telegram_bot/bot/menu.py](../services/telegram_bot/bot/menu.py) | Reply-keyboard helpers, startup menu |
+| [services/telegram_bot/bot/handlers.py](../services/telegram_bot/bot/handlers.py) | Telegram voice/text handlers → `core.processor` → Markdown reply |
+| [services/voice_gateway/main.py](../services/voice_gateway/main.py) | FastAPI gateway for RPi/ESP32, TTS routing, Telegram receipt push |
+| [core/voice.py](../core/voice.py) | Whisper STT (local + external) |
+| [core/processor.py](../core/processor.py) | The shared brain — orchestrates everything |
+| [core/rag/rewriter.py](../core/rag/rewriter.py) | Pre-RAG: intent classification + query normalization |
+| [core/rag/index.py](../core/rag/index.py) | Build / query the entity vector index |
+| [core/rag/embeddings.py](../core/rag/embeddings.py) | Embedding HTTP client |
+| [core/rag/store.py](../core/rag/store.py) | sqlite-vec persistence |
+| [core/llm.py](../core/llm.py) | All LLM calls: parser (legacy + RAG), state formatter, smalltalk, clarification |
+| [core/llm_lmstudio.py](../core/llm_lmstudio.py) | LM Studio MCP fallback (Mode 2) |
+| [core/ha.py](../core/ha.py) | Home Assistant REST client (`get_state`, `call_service`, `get_all_states`) |
+| [core/prompts.yaml](../core/prompts.yaml) | All system prompts |
+| [core/entities.yaml](../core/entities.yaml) | Curated entity catalogue (legacy path + RAG keyword/meta overlay) |
+| [core/config.py](../core/config.py) | All env-driven settings |
 
 ---
 
@@ -462,20 +470,20 @@ Renderers:
 
 ### Telegram bot
 ```bash
-cd gateway/services/telegram_bot
+cd services/telegram_bot
 python main.py
 ```
 
 ### Voice gateway
 ```bash
-cd gateway/services/voice_gateway
+cd services/voice_gateway
 pip install -r requirements.txt
 python main.py   # listens on 0.0.0.0:8765
 ```
 
 ### Raspberry Pi client
 ```bash
-cd gateway/devices/raspberry_pi
+cd clients/raspberry_pi
 sudo apt install -y portaudio19-dev espeak espeak-data libespeak-dev
 pip install -r requirements.txt
 export GATEWAY_URL="http://<ai-pc-ip>:8765"
@@ -495,7 +503,7 @@ Set the RPi's `DEVICE_ID` to your Telegram chat ID (e.g. `DEVICE_ID=123456789`).
 
 ### Add or change a Telegram menu button
 
-Edit `gateway/services/telegram_bot/menus.yaml` only. Restart the bot. See the `menus.yaml` section in the [Telegram bot README](gateway/services/telegram_bot/README.md) for the full syntax.
+Edit `services/telegram_bot/menus.yaml` only. Restart the bot. See the `menus.yaml` section in the [Telegram bot README](../services/telegram_bot/README.md) for the full syntax.
 
 ### Add a new frontend (web, ESP32-S3, HomeKit, …)
 

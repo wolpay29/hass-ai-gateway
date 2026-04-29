@@ -9,7 +9,7 @@ cd assistant
 python services/voice_gateway/main.py
 ```
 
-## Config (gateway/.env)
+## Config (.env)
 
 | Variable | Default | Description |
 |---|---|---|
