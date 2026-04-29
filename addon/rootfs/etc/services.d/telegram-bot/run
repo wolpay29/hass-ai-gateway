@@ -1,0 +1,13 @@
+#!/command/with-contenv bashio
+set -e
+
+if ! bashio::config.true 'services.telegram_bot'; then
+    bashio::log.info "[telegram-bot] disabled in config — sleeping"
+    exec sleep infinity
+fi
+
+source /usr/lib/hass-ai-gateway/export-env.sh
+
+bashio::log.info "[telegram-bot] starting Telegram polling"
+cd /opt/gateway/services/telegram_bot
+exec python3 main.py

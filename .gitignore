@@ -46,6 +46,6 @@ coverage-report/
 .coverage
 
 # HA Add-on local build staging
-assistant_addon/_build/
-assistant_addon/_data/
+addon/_build/
+addon/_data/
 
