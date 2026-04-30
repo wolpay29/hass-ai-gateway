@@ -82,18 +82,7 @@ _RAG_ENRICH_MAX_WORDS = 5
 
 
 def _resolve_command(transcript: str, embed_query: str, chat_id: int) -> dict | None:
-    """Pick the right LLM entry point (RAG or legacy) for the primary path.
-
-    `embed_query` is what gets embedded for RAG retrieval (may be rewritten).
-    `transcript` is what the parser LLM sees (original user text).
-
-    RAG errors are caught and logged here, and the function falls back to the
-    legacy entities.yaml path so one bad embedding call doesn't kill a command.
-
-    The parser itself decides when to ask back: if it returns a non-empty
-    `clarification_question` with no actions, we surface it via the same
-    {"_clarify": ...} channel the rest of the pipeline already understands.
-    """
+    """Pick the right LLM entry point (RAG or legacy) for the primary path."""
     if RAG_ENABLED:
         try:
             from core.rag.index import query as rag_query
@@ -144,20 +133,8 @@ def _new_result(transcript: str) -> dict:
 def process_transcript_split(
     transcript: str, chat_id: int = 0
 ) -> "tuple[dict, Callable[[], dict] | None]":
-    """LLM-Phase und HA-Ausführung getrennt.
-
-    Gibt (partial_result, execute_fn) zurück:
-    - partial_result hat `reply` bereits gesetzt (aus dem LLM), aber
-      `actions_executed` ist noch leer.
-    - execute_fn() führt die HA-Actions aus, füllt `actions_executed` und
-      gibt partial_result zurück. Darf in einem Background-Thread aufgerufen
-      werden, sobald die Antwort an den Caller gesendet wurde.
-    - execute_fn ist None wenn keine Actions ausgeführt werden müssen
-      (Smalltalk, Fehler, reine Statusantwort, MCP-Fallback).
-
-    process_transcript() ist ein einfacher Wrapper darüber.
-    """
-    from typing import Callable  # lokaler Import vermeidet zirkulaere Abhaengigkeiten
+    """LLM-Phase und HA-Ausführung getrennt."""
+    from typing import Callable
 
     result = _new_result(transcript)
     logger.info(
@@ -170,9 +147,9 @@ def process_transcript_split(
 
     if intent == "smalltalk":
         logger.info(f"[Processor] Intent={intent} — routing to smalltalk LLM")
-        chat_reply = smalltalk_reply(transcript, chat_id=chat_id)
-        result["reply"] = chat_reply or ""
-        if not chat_reply:
+        st = smalltalk_reply(transcript, chat_id=chat_id)
+        result["reply"] = (st.get("reply") or "") if st else ""
+        if not st:
             result["error"] = "smalltalk_failed"
         return result, None
 
@@ -248,8 +225,6 @@ def process_transcript_split(
                 result["error"] = "no_match"
             return result, None
 
-    # Reply aus dem LLM steht fest — ab hier kann der Caller die Antwort
-    # bereits senden. Die eigentliche HA-Ausführung erfolgt in execute_fn.
     result["reply"] = reply
 
     def execute_fn() -> dict:
@@ -295,11 +270,7 @@ def process_transcript_split(
 
 
 def process_transcript(transcript: str, chat_id: int = 0) -> dict:
-    """Vollständiger synchroner Ablauf — LLM + HA-Ausführung in einem Aufruf.
-
-    Für Caller die nicht splitten wollen (Tests, Legacy-Code).
-    Voice-Gateway und Telegram nutzen process_transcript_split() direkt.
-    """
+    """Vollständiger synchroner Ablauf — LLM + HA-Ausführung in einem Aufruf."""
     result, execute_fn = process_transcript_split(transcript, chat_id)
     if execute_fn:
         execute_fn()
