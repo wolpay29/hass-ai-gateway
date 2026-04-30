@@ -26,12 +26,14 @@
     "temperature": 0.1,
     "no_think": true,
     "context_length": 8000,
-    "mcp_allowed_tools": "HassTurnOn,HassTurnOff,HassCancelAllTimers,HassBroadcast,HassClimateSetTemperature,HassLightSet,GetDateTime,GetLiveContext"
+    "mcp_allowed_tools": "HassTurnOn,HassTurnOff,HassCancelAllTimers,HassBroadcast,HassClimateSetTemperature,HassLightSet,GetDateTime,GetLiveContext",
+    "max_actions_per_command": 0
   },
   "voice_gateway": {
     "port": 8765,
     "api_key": "",
-    "telegram_push": true
+    "telegram_push": true,
+    "reply_with_transcript": true
   },
   "notify_gateway": {
     "port": 8766,
@@ -62,12 +64,9 @@
     "rest_max_entities": 0,
     "rest_domains": "light,switch,sensor,binary_sensor,climate,automation,cover"
   },
-  "advanced": {
-    "llm_history_size": 0,
-    "history_include_assistant": true,
-    "history_append_executions": false,
-    "max_actions_per_command": 0,
-    "voice_reply_with_transcript": true,
-    "notify_http_timeout": 10
+  "history": {
+    "size": 0,
+    "include_assistant": true,
+    "append_executions": false
   }
 }

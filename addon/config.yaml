@@ -50,10 +50,12 @@ options:
     no_think: true
     context_length: 8000
     mcp_allowed_tools: "HassTurnOn,HassTurnOff,HassCancelAllTimers,HassBroadcast,HassClimateSetTemperature,HassLightSet,GetDateTime,GetLiveContext"
+    max_actions_per_command: 0
   voice_gateway:
     port: 8765
     api_key: ""
     telegram_push: true
+    reply_with_transcript: true
   notify_gateway:
     port: 8766
     http_timeout: 10
@@ -78,13 +80,10 @@ options:
     mode: 0
     rest_max_entities: 0
     rest_domains: "light,switch,sensor,binary_sensor,climate,automation,cover"
-  advanced:
-    llm_history_size: 0
-    history_include_assistant: true
-    history_append_executions: false
-    max_actions_per_command: 0
-    voice_reply_with_transcript: true
-    notify_http_timeout: 10
+  history:
+    size: 0
+    include_assistant: true
+    append_executions: false
 
 schema:
   services:
@@ -111,10 +110,12 @@ schema:
     no_think: bool
     context_length: int(512,131072)
     mcp_allowed_tools: str?
+    max_actions_per_command: int(0,100)
   voice_gateway:
     port: port
     api_key: password?
     telegram_push: bool
+    reply_with_transcript: bool
   notify_gateway:
     port: port
     http_timeout: int(1,300)
@@ -139,10 +140,7 @@ schema:
     mode: int(0,2)
     rest_max_entities: int(0,10000)
     rest_domains: str
-  advanced:
-    llm_history_size: int(0,100)
-    history_include_assistant: bool
-    history_append_executions: bool
-    max_actions_per_command: int(0,100)
-    voice_reply_with_transcript: bool
-    notify_http_timeout: int(1,300)
+  history:
+    size: int(0,100)
+    include_assistant: bool
+    append_executions: bool

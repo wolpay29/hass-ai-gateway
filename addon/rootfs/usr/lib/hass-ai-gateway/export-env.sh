@@ -28,11 +28,13 @@ export LMSTUDIO_TEMPERATURE="$(bashio::config 'lmstudio.temperature')"
 export LMSTUDIO_NO_THINK="$(bashio::config 'lmstudio.no_think')"
 export LMSTUDIO_CONTEXT_LENGTH="$(bashio::config 'lmstudio.context_length')"
 export LMSTUDIO_MCP_ALLOWED_TOOLS="$(bashio::config 'lmstudio.mcp_allowed_tools')"
+export MAX_ACTIONS_PER_COMMAND="$(bashio::config 'lmstudio.max_actions_per_command')"
 
 # --- Voice Gateway ---
 export GATEWAY_PORT="$(bashio::config 'voice_gateway.port')"
 export GATEWAY_API_KEY="$(bashio::config 'voice_gateway.api_key')"
 export GATEWAY_TELEGRAM_PUSH="$(bashio::config 'voice_gateway.telegram_push')"
+export VOICE_REPLY_WITH_TRANSCRIPT="$(bashio::config 'voice_gateway.reply_with_transcript')"
 
 # --- Notify Gateway ---
 export NOTIFY_PORT="$(bashio::config 'notify_gateway.port')"
@@ -64,12 +66,10 @@ export FALLBACK_MODE="$(bashio::config 'fallback.mode')"
 export FALLBACK_REST_MAX_ENTITIES="$(bashio::config 'fallback.rest_max_entities')"
 export FALLBACK_REST_DOMAINS="$(bashio::config 'fallback.rest_domains')"
 
-# --- Advanced / shared ---
-export LLM_HISTORY_SIZE="$(bashio::config 'advanced.llm_history_size')"
-export HISTORY_INCLUDE_ASSISTANT="$(bashio::config 'advanced.history_include_assistant')"
-export HISTORY_APPEND_EXECUTIONS="$(bashio::config 'advanced.history_append_executions')"
-export MAX_ACTIONS_PER_COMMAND="$(bashio::config 'advanced.max_actions_per_command')"
-export VOICE_REPLY_WITH_TRANSCRIPT="$(bashio::config 'advanced.voice_reply_with_transcript')"
+# --- History (chat memory across turns) ---
+export LLM_HISTORY_SIZE="$(bashio::config 'history.size')"
+export HISTORY_INCLUDE_ASSISTANT="$(bashio::config 'history.include_assistant')"
+export HISTORY_APPEND_EXECUTIONS="$(bashio::config 'history.append_executions')"
 
 # --- Persistent paths ---
 export VOICE_DOWNLOAD_DIR=/data/voice

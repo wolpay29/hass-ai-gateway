@@ -26,19 +26,43 @@ fi
 
 bashio::log.info "hass-ai-gateway: user config ready at /addon_configs/<slug>/"
 
+# Hard-fail when an enabled service is missing required config. The HA UI
+# cannot enforce conditional "required" fields, so we validate here. The user
+# sees the failure in the add-on log and the addon stays stopped until fixed.
+ERRORS=0
+fail() { bashio::log.fatal "$1"; ERRORS=$((ERRORS+1)); }
+
 if bashio::config.true 'services.telegram_bot'; then
-    if ! bashio::config.has_value 'telegram.bot_token'; then
-        bashio::log.warning "telegram_bot enabled but telegram.bot_token is empty"
-    fi
-    if [ "$(bashio::config 'telegram.chat_id')" = "0" ]; then
-        bashio::log.warning "telegram_bot enabled but telegram.chat_id is 0"
-    fi
+    bashio::config.has_value 'telegram.bot_token' \
+        || fail "services.telegram_bot=true but telegram.bot_token is empty (get one from @BotFather)"
+    [ "$(bashio::config 'telegram.chat_id')" != "0" ] \
+        || fail "services.telegram_bot=true but telegram.chat_id is 0 (your numeric Telegram user id)"
 fi
 
 if bashio::config.true 'services.voice_gateway' || bashio::config.true 'services.telegram_bot'; then
-    if ! bashio::config.has_value 'lmstudio.url'; then
-        bashio::log.warning "lmstudio.url is empty — LLM-dependent commands will fail"
-    fi
+    bashio::config.has_value 'lmstudio.url' \
+        || fail "lmstudio.url is empty — required when voice_gateway or telegram_bot is enabled"
+fi
+
+if bashio::config.true 'services.voice_gateway' || bashio::config.true 'services.notify_gateway'; then
+    bashio::config.has_value 'whisper.external_url' \
+        || bashio::log.warning "whisper.external_url is empty — voice features (audio upload) will be unavailable"
+fi
+
+if bashio::config.true 'rag.enabled'; then
+    bashio::config.has_value 'rag.embed_url' \
+        || bashio::log.notice "rag.embed_url empty — falling back to lmstudio.url for embeddings"
+fi
+
+if bashio::config.true 'llm_preprocessor.enabled'; then
+    bashio::config.has_value 'llm_preprocessor.url' \
+        || bashio::log.notice "llm_preprocessor.url empty — falling back to lmstudio.url"
+    bashio::config.has_value 'llm_preprocessor.model' \
+        || bashio::log.notice "llm_preprocessor.model empty — falling back to lmstudio.model"
+fi
+
+if [ "${ERRORS}" -gt 0 ]; then
+    bashio::exit.nok "Fix ${ERRORS} configuration error(s) in the Configuration tab and restart the add-on."
 fi
 
 bashio::log.info "hass-ai-gateway: cont-init complete"

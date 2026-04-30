@@ -107,18 +107,23 @@ lmstudio:
   no_think: true
   context_length: 8000
   mcp_allowed_tools: "HassTurnOn,HassTurnOff,..."   # comma-separated
+  max_actions_per_command: 0                        # 0 = unlimited
 ```
 
 `mcp_allowed_tools` is the whitelist used in `FALLBACK_MODE=2`. Empty = no
 filter (all tools the HA MCP server exposes are allowed).
+
+The values in this section are also reused as defaults by `llm_preprocessor`
+and `rag` when those leave their `url` / `model` / `api_key` blank.
 
 ### `voice_gateway` / `notify_gateway`
 
 ```yaml
 voice_gateway:
   port: 8765
-  api_key: ""        # X-Api-Key header expected from clients; empty = no auth
+  api_key: ""               # X-Api-Key header expected from clients; empty = no auth
   telegram_push: true
+  reply_with_transcript: true
 notify_gateway:
   port: 8766
   http_timeout: 10
@@ -178,17 +183,43 @@ fallback:
   rest_domains: "light,switch,sensor,binary_sensor,climate,automation,cover"
 ```
 
-### `advanced`
+### `history`
 
 ```yaml
-advanced:
-  llm_history_size: 0
-  history_include_assistant: true
-  history_append_executions: false
-  max_actions_per_command: 0
-  voice_reply_with_transcript: true
-  notify_http_timeout: 10
+history:
+  size: 0                       # 0 = no history; each request is independent
+  include_assistant: true       # let the LLM see its own past replies
+  append_executions: false      # add "executed: ..." lines so follow-ups have context
 ```
+
+### Required fields
+
+Nothing is required globally — every "required" field depends on which
+services you enable. The HA UI cannot express conditional requirements, so
+the affected field labels say "required if X is enabled", and the add-on
+validates on startup and refuses to start when something essential is
+missing:
+
+| Field | Required when |
+|-------|---------------|
+| `telegram.bot_token` | `services.telegram_bot` is on |
+| `telegram.chat_id` (≠ 0) | `services.telegram_bot` is on |
+| `lmstudio.url` | `services.voice_gateway` or `services.telegram_bot` is on |
+
+Pure example: if you only use `notify_gateway` (HA → TTS / Telegram fan-out
+without LLM commands), all three are optional.
+
+Strongly recommended (warning only — feature degrades gracefully):
+
+| Field | Effect when missing |
+|-------|---------------------|
+| `whisper.external_url` | Voice input (audio uploads, Telegram voice messages) unavailable; text still works |
+| `home_assistant.token` | Falls back to the supervisor token — only needed for external HA instances |
+
+Auto-fallbacks (no warning):
+
+- `rag.embed_url` empty → reuses `lmstudio.url`
+- `llm_preprocessor.url` / `model` / `api_key` empty → reuses corresponding `lmstudio.*`
 
 ---
 
