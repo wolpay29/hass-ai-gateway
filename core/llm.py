@@ -129,6 +129,7 @@ def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
         f"MaxActions: {MAX_ACTIONS_PER_COMMAND}"
     )
 
+    # History aufbauen (nur wenn aktiviert)
     history = []
     if LLM_HISTORY_SIZE > 0 and chat_id != 0:
         history = _history.get(chat_id, [])
@@ -159,6 +160,8 @@ def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
             return None
         logger.info(f"[LLM] Parsed: {result}")
 
+        # Alle entity_ids gegen entities.yaml validieren.
+        # "needs_fallback" ist ein Steuersignal, kein echter HA-Aufruf — immer durchlassen.
         validated_actions = []
         for act in result.get("actions", []):
             if act.get("action") == "needs_fallback":
@@ -169,16 +172,21 @@ def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
             elif act.get("entity_id"):
                 logger.warning(f"[LLM] Halluzinierte Entity '{act['entity_id']}' – wird ignoriert")
 
+        # Limit anwenden und ignorierte Actions markieren
         if MAX_ACTIONS_PER_COMMAND > 0 and len(validated_actions) > MAX_ACTIONS_PER_COMMAND:
             logger.warning(
                 f"[LLM] Zu viele Aktionen ({len(validated_actions)}), "
                 f"begrenze auf {MAX_ACTIONS_PER_COMMAND}"
             )
+            
+            # Die ersten N bleiben normal, der Rest bekommt "ignored": True
             for i in range(MAX_ACTIONS_PER_COMMAND, len(validated_actions)):
                 validated_actions[i]["ignored"] = True
 
         result["actions"] = validated_actions
 
+        # History speichern (nur wenn aktiviert).
+        # Assistant-Turn nur speichern wenn HISTORY_INCLUDE_ASSISTANT=true.
         if LLM_HISTORY_SIZE > 0 and chat_id != 0:
             history.append({"role": "user", "content": transcript})
             if HISTORY_INCLUDE_ASSISTANT:
@@ -217,7 +225,12 @@ def get_recent_user_messages(chat_id: int) -> list[str]:
 
 
 def get_recent_assistant_replies(chat_id: int) -> list[str]:
-    """Return stored assistant context (oldest first)."""
+    """Return stored assistant context (oldest first).
+
+    Assistant turns are raw JSON in history. This pulls out the 'reply' text
+    plus anything appended after the JSON (e.g. execution summaries written by
+    append_execution_summary() when HISTORY_APPEND_EXECUTIONS is active).
+    """
     if LLM_HISTORY_SIZE <= 0 or chat_id == 0:
         return []
     out: list[str] = []
@@ -245,7 +258,11 @@ def get_recent_assistant_replies(chat_id: int) -> list[str]:
 
 
 def append_execution_summary(chat_id: int, summary: str) -> None:
-    """Append an execution-summary line to the most recent assistant entry in history."""
+    """Append an execution-summary line to the most recent assistant entry in history.
+
+    Called from handlers.py after actions run. No-op if history is disabled,
+    the summary is empty, or there is no assistant turn to attach to.
+    """
     if LLM_HISTORY_SIZE <= 0 or chat_id == 0 or not summary:
         return
     history = _history.get(chat_id)
@@ -258,7 +275,12 @@ def append_execution_summary(chat_id: int, summary: str) -> None:
 
 
 def append_clarification_turn(chat_id: int, transcript: str, question: str) -> None:
-    """Persist a clarification round-trip in history."""
+    """Persist a clarification round-trip in history so the follow-up turn keeps
+    the original action intent (e.g. "Licht abschalten" → "Welches?" → "Bad UG").
+
+    Without this, the ambiguous transcript and the clarification question are
+    dropped, and the next parser call only sees the entity-naming reply.
+    """
     if LLM_HISTORY_SIZE <= 0 or chat_id == 0 or not transcript:
         return
     history = _history.get(chat_id, [])
@@ -272,14 +294,13 @@ def append_clarification_turn(chat_id: int, transcript: str, question: str) -> N
     logger.info(f"[LLM] Clarification-Turn fuer chat {chat_id} gespeichert ({len(history)} Eintraege)")
 
 
-def smalltalk_reply(transcript: str, chat_id: int = 0) -> dict | None:
+def smalltalk_reply(transcript: str, chat_id: int = 0) -> str | None:
     """Free-form chat reply for non-command intents (smalltalk / clarification).
 
-    Returns {"reply": str, "actions": []} — same shape as other parser functions
-    so callers can treat all LLM results uniformly. The model may return either
-    plain text or JSON; both are handled via _extract_json with a plain-text
-    fallback so TTS never receives raw JSON syntax.
-    Returns None on error.
+    Uses the same LLM as the parser but a dedicated 'smalltalk' system prompt
+    that produces casual German prose (no JSON, no actions). History is included
+    so follow-ups feel coherent. Returns None on error so the caller can fall
+    back gracefully.
     """
     transcript = (transcript or "").strip()
     if not transcript:
@@ -311,35 +332,28 @@ def smalltalk_reply(transcript: str, chat_id: int = 0) -> dict | None:
             endpoint, json=payload, headers=_lmstudio_headers(), timeout=LMSTUDIO_TIMEOUT
         )
         response.raise_for_status()
-        raw = (response.json()["choices"][0]["message"]["content"] or "").strip()
+        content = (response.json()["choices"][0]["message"]["content"] or "").strip()
 
-        # Try to parse as JSON first (model often returns {"reply":...,"actions":[]})
-        parsed = _extract_json(raw)
-        if parsed is not None:
-            reply = (parsed.get("reply") or "").strip()
-            result = {"reply": reply, "actions": []}
-        else:
-            # Plain text response — strip stray quotes / labels
-            text = raw.strip('"').strip("'")
-            text = re.sub(r"^(Assistent|Assistant)\s*:\s*", "", text, flags=re.IGNORECASE)
-            result = {"reply": text.strip(), "actions": []}
+        # Strip stray quotes / leading "Assistent:" labels some models add.
+        content = content.strip('"').strip("'")
+        content = re.sub(r"^(Assistent|Assistant)\s*:\s*", "", content, flags=re.IGNORECASE)
 
-        if not result["reply"]:
+        if not content:
             logger.warning("[LLM Smalltalk] Leere Antwort")
             return None
 
-        logger.info(f"[LLM Smalltalk] Antwort: {result['reply']}")
+        logger.info(f"[LLM Smalltalk] Antwort: {content}")
 
         if LLM_HISTORY_SIZE > 0 and chat_id != 0:
             history.append({"role": "user", "content": transcript})
             if HISTORY_INCLUDE_ASSISTANT:
-                history.append({"role": "assistant", "content": raw})
+                history.append({"role": "assistant", "content": content})
             max_entries = LLM_HISTORY_SIZE * (2 if HISTORY_INCLUDE_ASSISTANT else 1)
             if len(history) > max_entries:
                 history = history[-max_entries:]
             _history[chat_id] = history
 
-        return result
+        return content
 
     except Exception as e:
         logger.error(f"[LLM Smalltalk] Fehler: {e}")
@@ -373,7 +387,11 @@ def _humanize_state(domain: str, state: str | None) -> str:
 
 
 def _format_entity_with_state(e: dict, ha_state: dict | None) -> str:
-    """Eine Entity-Zeile fuer den RAG-Prompt — mit aktuellem state und relevanten Attributen."""
+    """Eine Entity-Zeile fuer den RAG-Prompt — mit aktuellem state und relevanten Attributen.
+
+    e: Kandidat aus dem RAG-Index ({entity_id, friendly_name, domain, actions, meta}).
+    ha_state: HA-Live-Antwort (state + attributes) oder None falls Abruf fehlschlug.
+    """
     eid = e["entity_id"]
     domain = e.get("domain") or (eid.split(".", 1)[0] if "." in eid else "")
     name = e.get("friendly_name") or "-"
@@ -407,13 +425,22 @@ def _format_entity_with_state(e: dict, ha_state: dict | None) -> str:
 
 
 def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -> dict | None:
-    """RAG path: entity list mit aktuellen States, Attributen und expliziten actions."""
+    """RAG path: entity list mit aktuellen States, Attributen und expliziten actions.
+
+    Expected shape of each dict in `entities`:
+        {entity_id, friendly_name, domain, actions: list[str], meta: str}
+
+    Vor dem LLM-Call werden States aller Kandidaten parallel aus HA geholt, sodass
+    das LLM Statusabfragen direkt beantworten und Bedingungen/Berechnungen
+    eigenstaendig durchfuehren kann (keine zweite get_state-Runde noetig).
+    """
     if not entities:
         logger.warning("[LLM RAG] Keine RAG-Entities uebergeben")
         return None
 
     valid_ids = {e["entity_id"] for e in entities}
 
+    # States parallel fuer alle Kandidaten holen — verspaetete Imports gegen Zyklen.
     from core.ha import get_states_bulk
     states_map = get_states_bulk(list(valid_ids))
     logger.info(f"[LLM RAG] States geholt: {len(states_map)}/{len(valid_ids)}")
@@ -422,6 +449,7 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
 
     system_prompt = _build_prompt("rag_parser", memory="post_llm", entity_list=entity_list)
 
+    # History aufbauen (gleiche Logik wie parse_command)
     history = []
     if LLM_HISTORY_SIZE > 0 and chat_id != 0:
         history = _history.get(chat_id, [])
@@ -487,6 +515,8 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
 
         result["actions"] = validated
 
+        # History speichern (gleiche Logik wie parse_command).
+        # Assistant-Turn nur speichern wenn HISTORY_INCLUDE_ASSISTANT=true.
         if LLM_HISTORY_SIZE > 0 and chat_id != 0:
             history.append({"role": "user", "content": transcript})
             if HISTORY_INCLUDE_ASSISTANT:
@@ -511,7 +541,13 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
 
 
 def parse_command_with_states(transcript: str, states: list[dict], chat_id: int = 0, prior_history: list | None = None) -> dict | None:
-    """REST-Fallback (Mode 1): nutzt Live-Entities aus HA statt entities.yaml."""
+    """REST-Fallback (Mode 1): nutzt Live-Entities aus HA statt entities.yaml.
+
+    Gleiches JSON-Output-Format wie parse_command(). entity_list wird aus den
+    uebergebenen Live-States gebaut; Validierung gegen deren entity_ids.
+    Wenn ein Treffer gefunden wird, ist das Ergebnis im handlers.py genauso
+    ausfuehrbar wie das Ergebnis von parse_command().
+    """
     if not states:
         logger.warning("[LLM Fallback REST] Keine Live-States uebergeben")
         return None
@@ -566,6 +602,7 @@ def parse_command_with_states(transcript: str, states: list[dict], chat_id: int 
             if eid not in valid_ids:
                 logger.warning(f"[LLM Fallback REST] Halluzinierte Entity '{eid}' - ignoriert")
                 continue
+            # domain nachziehen falls das Modell sie nicht geliefert hat
             if not act.get("domain") and "." in eid:
                 act["domain"] = eid.split(".", 1)[0]
             sd = act.get("service_data")
@@ -594,3 +631,5 @@ def parse_command_with_states(transcript: str, states: list[dict], chat_id: int 
     except Exception as e:
         logger.error(f"[LLM Fallback REST] Fehler: {e}")
         return None
+
+
