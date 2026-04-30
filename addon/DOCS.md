@@ -16,6 +16,28 @@ entity retrieval), which is why they live in one container instead of three.
 
 ---
 
+## User-editable config files
+
+The add-on exposes editable files under `/addon_configs/<slug>/` (visible in
+**Samba share** and the official **File editor** add-on). Defaults are seeded
+on first start and your edits persist across add-on updates.
+
+| File | What it does |
+|------|--------------|
+| `userconfig/entities.yaml` | Curated entity catalogue (legacy parser + RAG keyword/meta overlay) |
+| `userconfig/entities_blacklist.yaml` | Entity-id patterns excluded from RAG indexing |
+| `userconfig/pre_llm_memory.md` | Free-text hints appended to the query-rewriter prompt (typo/STT fixes, pronoun rules) |
+| `userconfig/post_llm_memory.md` | Free-text hints appended to all parser prompts (common errors, preferences, never-do rules) |
+| `menus.yaml` | Telegram bot menus, buttons, and action mappings |
+
+After editing: restart the add-on. After editing `entities.yaml` while RAG is
+enabled, also send `/rag_rebuild` in the Telegram chat.
+
+All other settings (tokens, URLs, model names, RAG/fallback toggles) are in the
+**Configuration** tab below — no file editing required.
+
+---
+
 ## Configuration
 
 Configuration is grouped in the UI. The sections below mirror what you'll see

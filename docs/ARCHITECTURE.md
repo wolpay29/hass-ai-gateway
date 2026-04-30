@@ -16,9 +16,12 @@ hass-ai-gateway/
 │   ├── llm_lmstudio.py                -- MCP fallback (Mode 2)
 │   ├── ha.py                          -- Home Assistant REST client
 │   ├── voice.py                       -- Whisper transcription (local or external)
-│   ├── entities.yaml                  -- curated entity catalogue
-│   ├── entities_blacklist.yaml        -- entities excluded from RAG / LLM context
-│   ├── prompts.yaml                   -- all system prompts
+│   ├── prompts.yaml                   -- all system prompts (templates)
+│   ├── userconfig/                    -- user-editable config (mount as volume)
+│   │   ├── entities.yaml              -- curated entity catalogue
+│   │   ├── entities_blacklist.yaml    -- entities excluded from RAG / LLM context
+│   │   ├── pre_llm_memory.md          -- hints appended to rewriter prompt
+│   │   └── post_llm_memory.md         -- hints appended to all parser prompts
 │   └── rag/                           -- embeddings, sqlite-vec store, index, rewriter
 │
 ├── services/                          <- adapters bundled into the HA add-on

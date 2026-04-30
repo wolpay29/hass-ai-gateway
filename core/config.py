@@ -156,3 +156,16 @@ if _fb_domains_raw in ("", "{}", "[]"):
     FALLBACK_REST_DOMAINS: list[str] = []
 else:
     FALLBACK_REST_DOMAINS = [d.strip() for d in _fb_domains_raw.split(",") if d.strip()]
+
+# User-editable Config-Dateien.
+# Bare-Metal: Defaults im Repo. Addon: zeigt auf /config (=/addon_configs/<slug>/),
+# damit der User die Files via HA File Editor / Samba bearbeiten kann.
+USERCONFIG_DIR = Path(
+    os.getenv("USERCONFIG_DIR", str(_PROJECT_ROOT / "core" / "userconfig"))
+)
+TELEGRAM_MENUS_PATH = Path(
+    os.getenv(
+        "TELEGRAM_MENUS_PATH",
+        str(_PROJECT_ROOT / "services" / "telegram_bot" / "menus.yaml"),
+    )
+)

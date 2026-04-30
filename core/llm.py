@@ -9,6 +9,7 @@ from core.config import (
     LMSTUDIO_TEMPERATURE, LMSTUDIO_NO_THINK,
     LLM_HISTORY_SIZE, MAX_ACTIONS_PER_COMMAND,
     HISTORY_INCLUDE_ASSISTANT,
+    USERCONFIG_DIR,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,12 +64,13 @@ def _lmstudio_headers() -> dict:
 
 
 def _load_entities() -> list:
-    path = Path(__file__).parent / "entities.yaml"
+    path = USERCONFIG_DIR / "entities.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     return (data or {}).get("entities") or []
 
 
 _prompts_cache: dict | None = None
+_memory_cache: dict[str, str] = {}
 
 
 def _load_prompts() -> dict:
@@ -79,9 +81,32 @@ def _load_prompts() -> dict:
     return _prompts_cache
 
 
-def _build_prompt(key: str, **kwargs) -> str:
+def _load_memory(name: str) -> str:
+    """Liest core/userconfig/<name>_memory.md (z.B. 'pre_llm', 'post_llm') als String.
+
+    Liefert "" wenn Datei fehlt oder nur Kommentare/Whitespace enthaelt.
+    HTML-Kommentare <!-- ... --> werden entfernt, damit reine Vorlagen-Files
+    nichts an den Prompt anhaengen. Cached nach erstem Lesen.
+    """
+    if name in _memory_cache:
+        return _memory_cache[name]
+    path = USERCONFIG_DIR / f"{name}_memory.md"
+    if path.exists():
+        raw = path.read_text(encoding="utf-8")
+        cleaned = re.sub(r"<!--.*?-->", "", raw, flags=re.DOTALL).strip()
+    else:
+        cleaned = ""
+    _memory_cache[name] = cleaned
+    return cleaned
+
+
+def _build_prompt(key: str, memory: str | None = None, **kwargs) -> str:
     prompts = _load_prompts()
     text = prompts[key].format(**kwargs)
+    if memory:
+        mem = _load_memory(memory)
+        if mem:
+            text += "\n\n# Zusaetzliche Hinweise / haeufige Fehler\n" + mem
     if LMSTUDIO_NO_THINK:
         text += "\n\n" + prompts["no_think_suffix"]
     return text
@@ -96,7 +121,7 @@ def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
         for e in entities
     )
 
-    system_prompt = _build_prompt("primary_parser", entity_list=entity_list)
+    system_prompt = _build_prompt("primary_parser", memory="post_llm", entity_list=entity_list)
 
     logger.info(
         f"[LLM] Transcript: '{transcript}' | Modell: {LMSTUDIO_MODEL} | "
@@ -422,7 +447,7 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
 
     entity_list = "\n".join(_format_entity_with_state(e, states_map.get(e["entity_id"])) for e in entities)
 
-    system_prompt = _build_prompt("rag_parser", entity_list=entity_list)
+    system_prompt = _build_prompt("rag_parser", memory="post_llm", entity_list=entity_list)
 
     # History aufbauen (gleiche Logik wie parse_command)
     history = []
@@ -535,7 +560,7 @@ def parse_command_with_states(transcript: str, states: list[dict], chat_id: int 
         for s in states
     )
 
-    system_prompt = _build_prompt("fallback_rest", entity_list=entity_list)
+    system_prompt = _build_prompt("fallback_rest", memory="post_llm", entity_list=entity_list)
 
     history = prior_history or []
 

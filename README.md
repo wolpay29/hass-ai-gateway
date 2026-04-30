@@ -37,3 +37,9 @@ All services share a single top-level `.env` (see
 [`.env.example`](.env.example)). When running as the HA add-on, options from
 the Configuration tab are exported into the same environment variables -- no
 `.env` needed inside the container.
+
+User-editable files — `entities.yaml`, `entities_blacklist.yaml`,
+`pre_llm_memory.md`, `post_llm_memory.md`, `menus.yaml`:
+
+- **HA Add-on**: under `/addon_configs/<slug>/` — edit via Samba or the **File editor** add-on. Persists across updates. See [`addon/DOCS.md`](addon/DOCS.md) for what each file does.
+- **Bare-metal**: [`core/userconfig/`](core/userconfig) + [`services/telegram_bot/menus.yaml`](services/telegram_bot/menus.yaml). Override paths via `USERCONFIG_DIR` / `TELEGRAM_MENUS_PATH`.

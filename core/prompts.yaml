@@ -6,7 +6,7 @@
 no_think_suffix: |-
   WICHTIG: Antworte SOFORT und DIREKT. Verwende KEINE <think> Tags!
 
-# 1) Primary-Parser: kuratierte entities.yaml -> JSON-Actions
+# 1) Primary-Parser: kuratierte userconfig/entities.yaml -> JSON-Actions
 primary_parser: |-
   Smart Home Assistent. Antworte NUR mit JSON, kein anderer Text.
 

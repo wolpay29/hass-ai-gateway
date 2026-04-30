@@ -33,8 +33,12 @@ hass-ai-gateway/
 │   ├── llm_lmstudio.py                -- MCP fallback (Mode 2)
 │   ├── ha.py                          -- Home Assistant REST client
 │   ├── voice.py                       -- Whisper transcription (local or external)
-│   ├── entities.yaml                  -- curated entity catalogue
-│   ├── prompts.yaml                   -- all system prompts
+│   ├── prompts.yaml                   -- all system prompts (templates)
+│   ├── userconfig/                    -- user-editable config
+│   │   ├── entities.yaml              -- curated entity catalogue
+│   │   ├── entities_blacklist.yaml    -- entities excluded from RAG / LLM context
+│   │   ├── pre_llm_memory.md          -- hints appended to rewriter prompt
+│   │   └── post_llm_memory.md         -- hints appended to all parser prompts
 │   └── rag/                           -- embeddings, sqlite-vec store, index, rewriter
 │
 ├── services/                          <- adapters bundled into the HA add-on
@@ -289,7 +293,7 @@ On any error → safe default `{"intent": "command", "query": <original>}`.
 
 ### 4.5 Entity retrieval
 
-- `RAG_ENABLED=false` → legacy `parse_command()` against `core/entities.yaml`.
+- `RAG_ENABLED=false` → legacy `parse_command()` against `core/userconfig/entities.yaml`.
 - `RAG_ENABLED=true` → `core.rag.index.query(embed_query)`:
   1. `embed_one()` against `RAG_EMBED_URL` / `RAG_EMBED_MODEL`.
   2. KNN in sqlite-vec with `k = RAG_TOP_K`.
@@ -374,7 +378,7 @@ Renderers:
 | `MAX_ACTIONS_PER_COMMAND` | Cap on actions per request (0 = unlimited) |
 | `FALLBACK_MODE` | 0 off / 1 REST live-states / 2 LM Studio MCP |
 | `FALLBACK_REST_DOMAINS`, `FALLBACK_REST_MAX_ENTITIES` | Filter for the REST fallback prompt size |
-| `RAG_ENABLED` | Use vector retrieval instead of `entities.yaml` |
+| `RAG_ENABLED` | Use vector retrieval instead of `userconfig/entities.yaml` |
 | `RAG_DB_PATH`, `RAG_TOP_K`, `RAG_KEYWORD_BOOST`, `RAG_EMBED_DIM` | Index location, retrieval depth, keyword bias, vector dim |
 | `RAG_EMBED_URL/_API_KEY/_MODEL/_TIMEOUT` | Embedding service (defaults to `LMSTUDIO_*`) |
 | `RAG_QUERY_REWRITE` | Enable rewriter + intent classification before RAG |
@@ -461,7 +465,10 @@ Renderers:
 | [core/llm_lmstudio.py](../core/llm_lmstudio.py) | LM Studio MCP fallback (Mode 2) |
 | [core/ha.py](../core/ha.py) | Home Assistant REST client (`get_state`, `call_service`, `get_all_states`) |
 | [core/prompts.yaml](../core/prompts.yaml) | All system prompts |
-| [core/entities.yaml](../core/entities.yaml) | Curated entity catalogue (legacy path + RAG keyword/meta overlay) |
+| [core/userconfig/entities.yaml](../core/userconfig/entities.yaml) | Curated entity catalogue (legacy path + RAG keyword/meta overlay) |
+| [core/userconfig/entities_blacklist.yaml](../core/userconfig/entities_blacklist.yaml) | Entity-id patterns excluded from RAG indexing |
+| [core/userconfig/pre_llm_memory.md](../core/userconfig/pre_llm_memory.md) | Hints appended to the rewriter prompt |
+| [core/userconfig/post_llm_memory.md](../core/userconfig/post_llm_memory.md) | Hints appended to all parser prompts |
 | [core/config.py](../core/config.py) | All env-driven settings |
 
 ---

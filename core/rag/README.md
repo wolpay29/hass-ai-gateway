@@ -79,13 +79,13 @@ The embedding model entry must show `"state": "loaded"`.
 
 ## Step 3 – Build the index
 
-Send `/rag_rebuild` in the Telegram chat. The bot pulls every HA entity, merges `entities.yaml` overlay data, embeds everything in batches, and writes `data/rag/entities.sqlite`.
+Send `/rag_rebuild` in the Telegram chat. The bot pulls every HA entity, merges `userconfig/entities.yaml` overlay data, embeds everything in batches, and writes `data/rag/entities.sqlite`.
 
 Typical runtime: **10–60 seconds** depending on entity count and embedding hardware.
 
 **When to rebuild:**
 - After adding new devices or integrations in HA
-- After editing `entities.yaml` (keywords, descriptions, actions override, meta)
+- After editing `userconfig/entities.yaml` (keywords, descriptions, actions override, meta)
 - After switching `RAG_EMBED_MODEL` (DB is recreated automatically if embedding dim changes)
 
 Rebuilding is upsert-based — existing rows are updated in place.

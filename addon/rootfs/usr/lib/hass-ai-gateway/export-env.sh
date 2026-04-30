@@ -74,3 +74,7 @@ export VOICE_REPLY_WITH_TRANSCRIPT="$(bashio::config 'advanced.voice_reply_with_
 # --- Persistent paths ---
 export VOICE_DOWNLOAD_DIR=/data/voice
 export PYTHONPATH=/opt/gateway
+
+# --- User-editable config (mapped to /addon_configs/<slug>/ on the host) ---
+export USERCONFIG_DIR=/config/userconfig
+export TELEGRAM_MENUS_PATH=/config/menus.yaml

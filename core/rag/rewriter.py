@@ -30,7 +30,7 @@ from core.config import (
     HISTORY_INCLUDE_ASSISTANT,
     LMSTUDIO_NO_THINK,
 )
-from core.llm import get_recent_user_messages, get_recent_assistant_replies
+from core.llm import get_recent_user_messages, get_recent_assistant_replies, _load_memory
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,9 @@ def rewrite_query(transcript: str, chat_id: int = 0) -> dict:
             history=_build_history_block(chat_id),
             transcript=transcript,
         )
+        memory = _load_memory("pre_llm")
+        if memory:
+            system_prompt += "\n\n# Zusaetzliche Hinweise / haeufige Fehler\n" + memory
         if LMSTUDIO_NO_THINK and "no_think_suffix" in prompts:
             system_prompt += "\n\n" + prompts["no_think_suffix"]
 

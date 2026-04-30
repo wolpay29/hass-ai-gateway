@@ -1,15 +1,15 @@
 import re
-from pathlib import Path
 
 import yaml
+
+from core.config import TELEGRAM_MENUS_PATH
 
 _config = None
 
 
 def _load():
     global _config
-    path = Path(__file__).parent.parent / "menus.yaml"
-    with open(path, encoding="utf-8") as f:
+    with open(TELEGRAM_MENUS_PATH, encoding="utf-8") as f:
         _config = yaml.safe_load(f)
 
 

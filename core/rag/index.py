@@ -8,6 +8,7 @@ import yaml
 from core.config import (
     HA_URL, HA_TOKEN,
     RAG_DB_PATH, RAG_TOP_K, RAG_KEYWORD_BOOST, RAG_EMBED_DIM,
+    USERCONFIG_DIR,
 )
 from core.rag import store
 from core.rag.embeddings import embed, embed_one
@@ -55,7 +56,7 @@ _DEFAULT_ACTIONS: list[str] = []
 
 def _load_yaml_curated() -> dict:
     """Return {entity_id: entity_dict} from entities.yaml."""
-    path = Path(__file__).parent.parent / "entities.yaml"
+    path = USERCONFIG_DIR / "entities.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     return {e["id"]: e for e in (data or {}).get("entities", [])}
 
@@ -66,7 +67,7 @@ def _load_blacklist() -> list[str]:
     Each pattern is either an exact entity_id or a Unix-style glob (fnmatch).
     Missing file or empty list -> no entities excluded.
     """
-    path = Path(__file__).parent.parent / "entities_blacklist.yaml"
+    path = USERCONFIG_DIR / "entities_blacklist.yaml"
     if not path.exists():
         return []
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}

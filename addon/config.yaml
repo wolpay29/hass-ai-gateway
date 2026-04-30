@@ -17,6 +17,7 @@ homeassistant_api: true
 host_network: false
 map:
   - share:rw
+  - addon_config:rw
 ports:
   "8765/tcp": 8765
   "8766/tcp": 8766

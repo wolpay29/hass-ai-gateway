@@ -79,7 +79,7 @@ flowchart TD
     ENRICH --> RAGON
 
     RAGON{"RAG_ENABLED ?"}
-    RAGON -- "false" --> LEGACY["parse_command<br/>(entities.yaml)"]
+    RAGON -- "false" --> LEGACY["parse_command<br/>(userconfig/entities.yaml)"]
     RAGON -- "true"  --> RAGQ["rag.index.query(embed_query)<br/>embed → KNN → keyword boost<br/>→ top-K candidates"]
     RAGQ -- "0 candidates" --> LEGACY
 
@@ -191,7 +191,7 @@ The history block sent to the rewriter is built from `LLM_HISTORY_SIZE` past tur
 
 ### 3.4 Entity retrieval
 
-- `RAG_ENABLED=false` → legacy `parse_command()` against `core/entities.yaml`.
+- `RAG_ENABLED=false` → legacy `parse_command()` against `core/userconfig/entities.yaml`.
 - `RAG_ENABLED=true` → `core.rag.index.query(embed_query)`:
   1. `embed_one()` against `RAG_EMBED_URL` / `RAG_EMBED_MODEL` (dim must match `RAG_EMBED_DIM`).
   2. KNN in `entity_vecs` (sqlite-vec) with `k = RAG_TOP_K`.
@@ -237,7 +237,7 @@ Output JSON:
 
 Validation rules:
 
-- Every `entity_id` must exist in the candidate list (or in `entities.yaml` for the legacy path); hallucinated IDs are dropped.
+- Every `entity_id` must exist in the candidate list (or in `userconfig/entities.yaml` for the legacy path); hallucinated IDs are dropped.
 - `service_data` must be a dict; invalid values are stripped.
 - `needs_fallback` is always allowed.
 
@@ -318,7 +318,7 @@ Renderers:
 | `MAX_ACTIONS_PER_COMMAND` | Cap on actions per request (0 = unlimited) |
 | `FALLBACK_MODE` | 0 off / 1 REST live-states / 2 LM Studio MCP |
 | `FALLBACK_REST_DOMAINS`, `FALLBACK_REST_MAX_ENTITIES` | Filter for the REST fallback prompt size |
-| `RAG_ENABLED` | Use vector retrieval instead of `entities.yaml` |
+| `RAG_ENABLED` | Use vector retrieval instead of `userconfig/entities.yaml` |
 | `RAG_DB_PATH`, `RAG_TOP_K`, `RAG_KEYWORD_BOOST`, `RAG_EMBED_DIM` | Index location, retrieval depth, keyword bias, vector dim |
 | `RAG_EMBED_URL/_API_KEY/_MODEL/_TIMEOUT` | Embedding service (defaults to `LMSTUDIO_*`) |
 | `RAG_QUERY_REWRITE` | Enable rewriter + intent classification before RAG |
@@ -432,5 +432,8 @@ If the power had been 18 W the parser would emit `{"actions":[{"entity_id":"swit
 | [core/llm_lmstudio.py](../core/llm_lmstudio.py) | LM Studio MCP fallback (Mode 2) |
 | [core/ha.py](../core/ha.py) | Home Assistant REST client (get_states_bulk, call_service with service_data, get_all_states) |
 | [core/prompts.yaml](../core/prompts.yaml) | All system prompts (parser, RAG parser with state context, REST fallback, query rewriter, smalltalk) |
-| [core/entities.yaml](../core/entities.yaml) | Curated entities (legacy + RAG keyword/meta source) |
+| [core/userconfig/entities.yaml](../core/userconfig/entities.yaml) | Curated entities (legacy + RAG keyword/meta source) |
+| [core/userconfig/entities_blacklist.yaml](../core/userconfig/entities_blacklist.yaml) | Entity-id patterns excluded from RAG indexing |
+| [core/userconfig/pre_llm_memory.md](../core/userconfig/pre_llm_memory.md) | Hints appended to the rewriter prompt |
+| [core/userconfig/post_llm_memory.md](../core/userconfig/post_llm_memory.md) | Hints appended to all parser prompts |
 | [core/config.py](../core/config.py) | All env-driven settings |
