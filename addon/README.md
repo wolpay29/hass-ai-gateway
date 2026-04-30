@@ -5,6 +5,35 @@ Supervisor add-on. Bundles three services from
 [`../services/`](../services) on top of the shared [`../core/`](../core)
 brain, each service individually toggleable from the add-on UI.
 
+## How it works
+
+You talk to your smart home via **Telegram** (text or voice message on your phone)
+or via a **Raspberry Pi / ESP32** with a wake word ("Hey Jarvis") next to any room.
+
+Each request flows through the same pipeline:
+
+1. **Speech-to-text** — voice recordings are transcribed by Whisper (local or
+   external server) into plain text.
+2. **Intent & query rewrite (pre-LLM)** — a small LLM call classifies the
+   request as a command, smalltalk, or clarification, and normalizes the phrase
+   for better search results.
+3. **RAG entity retrieval** — the normalized query is turned into a vector
+   embedding and matched against your HA entity catalogue (sqlite-vec KNN).
+   Only the most relevant devices are forwarded to the main LLM, keeping the
+   prompt small and accurate.
+4. **LLM parser** — the local LLM (LM Studio) sees the transcript, the
+   matching entities, and their current live states. It decides what action to
+   take, evaluates conditions ("only turn off if > 15 W"), calculates parameters
+   ("5 degrees above outdoor temp"), or asks a clarification question if the
+   command is ambiguous.
+5. **Home Assistant action** — the add-on calls the HA REST API to execute the
+   action (turn on/off, set temperature, trigger automation, …).
+6. **Reply** — Telegram gets a text reply with a status line per action.
+   The RPi/ESP32 gets a WAV file spoken aloud via TTS.
+
+**Telegram menus** (inline buttons) bypass the LLM entirely and trigger HA
+automations directly, so frequently used actions stay instant and reliable.
+
 ## What's inside
 
 | Service        | Port  | Purpose                                                                     |

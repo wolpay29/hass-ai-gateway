@@ -5,6 +5,7 @@ Unit files for the assistant services and an installer that wires them up.
 ## Install
 
 ```bash
+chmod +x ./install.sh
 sudo ./install.sh                       # all services: venvs + deps + enable + start
 sudo ./install.sh --no-start            # install only, don't enable/start
 sudo ./install.sh voice_gateway notify_gateway   # subset

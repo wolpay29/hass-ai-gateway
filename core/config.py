@@ -67,17 +67,12 @@ VOICE_DOWNLOAD_DIR = os.getenv("VOICE_DOWNLOAD_DIR", "data/voice")
 LMSTUDIO_URL = os.getenv("LMSTUDIO_URL", "http://10.1.10.78:1234")
 LMSTUDIO_MODEL = os.getenv("LMSTUDIO_MODEL", "qwen2.5-7b-instruct")
 LMSTUDIO_TIMEOUT = int(os.getenv("LMSTUDIO_TIMEOUT", "30"))
-LMSTUDIO_KEEP_ALIVE = int(os.getenv("LMSTUDIO_KEEP_ALIVE", "-1"))
 # LMSTUDIO_API_KEY: Pflicht wenn LM Studio Server-Auth aktiv ist (fuer MCP noetig).
 LMSTUDIO_API_KEY = os.getenv("LMSTUDIO_API_KEY", "")
 
-# Modellparameter (Quality/Geschwindigkeit)
 HA_SERVICE_TIMEOUT = int(os.getenv("HA_SERVICE_TIMEOUT", "15"))
 
 LMSTUDIO_TEMPERATURE = float(os.getenv("LMSTUDIO_TEMPERATURE", "0.1"))
-LMSTUDIO_TOP_P = float(os.getenv("LMSTUDIO_TOP_P", "0.9"))
-LMSTUDIO_TOP_K = int(os.getenv("LMSTUDIO_TOP_K", "20"))
-LMSTUDIO_NUM_CTX = int(os.getenv("LMSTUDIO_NUM_CTX", "2048"))
 
 LMSTUDIO_NO_THINK = os.getenv("LMSTUDIO_NO_THINK", "true").lower() == "true"
 
@@ -102,16 +97,21 @@ MAX_ACTIONS_PER_COMMAND = int(os.getenv("MAX_ACTIONS_PER_COMMAND", "0"))
 # RAG mode — replaces the entities.yaml -> LLM step when enabled.
 # Set RAG_ENABLED=false to keep the legacy behaviour completely unchanged.
 RAG_ENABLED = os.getenv("RAG_ENABLED", "false").lower() == "true"
-_RAG_DB_DEFAULT = str(Path(__file__).resolve().parent.parent / "data" / "rag" / "entities.sqlite")
-RAG_DB_PATH = os.getenv("RAG_DB_PATH", _RAG_DB_DEFAULT)
+_RAG_DB_DEFAULT = str(_PROJECT_ROOT / "data" / "rag" / "entities.sqlite")
+_raw_rag_db = os.getenv("RAG_DB_PATH", "")
+if _raw_rag_db:
+    _p = Path(_raw_rag_db)
+    RAG_DB_PATH = str(_p if _p.is_absolute() else _PROJECT_ROOT / _p)
+else:
+    RAG_DB_PATH = _RAG_DB_DEFAULT
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "15"))
 RAG_KEYWORD_BOOST = float(os.getenv("RAG_KEYWORD_BOOST", "0.3"))
 
 # Embedding model host — separate from chat LM Studio so you can use a different
 # server for embeddings if you want. Defaults fall back to the chat LM Studio.
-RAG_EMBED_URL = os.getenv("RAG_EMBED_URL", LMSTUDIO_URL)
-RAG_EMBED_API_KEY = os.getenv("RAG_EMBED_API_KEY", LMSTUDIO_API_KEY)
-RAG_EMBED_TIMEOUT = int(os.getenv("RAG_EMBED_TIMEOUT", str(LMSTUDIO_TIMEOUT)))
+RAG_EMBED_URL = os.getenv("RAG_EMBED_URL", "") or LMSTUDIO_URL
+RAG_EMBED_API_KEY = os.getenv("RAG_EMBED_API_KEY", "") or LMSTUDIO_API_KEY
+RAG_EMBED_TIMEOUT = int(os.getenv("RAG_EMBED_TIMEOUT", "") or str(LMSTUDIO_TIMEOUT))
 RAG_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", "text-embedding-nomic-embed-text-v2-moe")
 RAG_EMBED_DIM = int(os.getenv("RAG_EMBED_DIM", "768"))
 
@@ -123,7 +123,7 @@ LLM_PREPROCESSOR = os.getenv("LLM_PREPROCESSOR", "false").lower() == "true"
 LLM_PREPROCESSOR_URL = os.getenv("LLM_PREPROCESSOR_URL", "") or LMSTUDIO_URL
 LLM_PREPROCESSOR_API_KEY = os.getenv("LLM_PREPROCESSOR_API_KEY", "") or LMSTUDIO_API_KEY
 LLM_PREPROCESSOR_MODEL = os.getenv("LLM_PREPROCESSOR_MODEL", "") or LMSTUDIO_MODEL
-LLM_PREPROCESSOR_TIMEOUT = int(os.getenv("LLM_PREPROCESSOR_TIMEOUT", str(LMSTUDIO_TIMEOUT)))
+LLM_PREPROCESSOR_TIMEOUT = int(os.getenv("LLM_PREPROCESSOR_TIMEOUT", "") or str(LMSTUDIO_TIMEOUT))
 LLM_PREPROCESSOR_TEMPERATURE = float(os.getenv("LLM_PREPROCESSOR_TEMPERATURE", "0.1"))
 
 # UNIVERSAL (both RAG modes): if true, assistant turns are stored in history so

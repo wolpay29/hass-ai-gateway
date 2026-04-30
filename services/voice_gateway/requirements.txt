@@ -6,5 +6,4 @@ requests>=2.31
 python-dotenv>=1.0
 pyyaml
 sqlite-vec
-# Whisper — same as telegram_bot (already installed on your AI-PC, just reuse)
-# faster-whisper>=1.0
+faster-whisper>=1.0
