@@ -113,39 +113,55 @@ info "Python dependencies installed successfully."
 # ---------------------------------------------------------------------------
 section "4 — Configuration"
 # ---------------------------------------------------------------------------
-echo "  Answer each question. Press Enter to accept the default."
-echo
+RECONFIGURE=true
+ENV_FILE="$INSTALL_DIR/.env"
 
-ask GATEWAY_URL    "Voice Gateway URL"           "http://10.1.10.78:8765"
-ask_secret GATEWAY_API_KEY "Gateway API key (leave empty if none)"
-ask DEVICE_ID      "Device ID (e.g. rpi-wohnzimmer)" "rpi-wohnzimmer"
-ask WAKE_WORD      "Wake word"                   "hey_jarvis"
-ask WAKE_THRESHOLD "Wake threshold (0.0–1.0)"    "0.5"
+if [[ -f "$ENV_FILE" ]]; then
+    warn ".env already exists at $ENV_FILE"
+    if confirm "Keep existing .env and skip configuration prompts?"; then
+        RECONFIGURE=false
+        info "Keeping existing .env — skipping configuration step."
+        # Source existing values so ALSA_CARD and TTS_MODEL_PATH are available later.
+        set -a; source "$ENV_FILE"; set +a
+        TTS_MODEL_PATH="${TTS_MODEL:-}"
+    fi
+fi
 
-echo
-info "Finding ALSA audio devices…"
-echo "  --- arecord -l ---"
-arecord -l 2>/dev/null | grep "^card" || echo "  (none found)"
-echo "  --- aplay -l ---"
-aplay -l 2>/dev/null | grep "^card" || echo "  (none found)"
-echo
+if $RECONFIGURE; then
+    echo "  Answer each question. Press Enter to accept the default."
+    echo
 
-ask ALSA_INPUT_DEVICE  "ALSA input device (mic)"    "plughw:1,0"
-ask ALSA_OUTPUT_DEVICE "ALSA output device (speaker)" "plughw:1,0"
-ask SPEAKER_VOLUME     "Speaker volume"              "100%"
+    ask GATEWAY_URL    "Voice Gateway URL"           "http://10.1.10.78:8765"
+    ask_secret GATEWAY_API_KEY "Gateway API key (leave empty if none)"
+    ask DEVICE_ID      "Device ID (e.g. rpi-wohnzimmer)" "rpi-wohnzimmer"
+    ask WAKE_WORD      "Wake word"                   "hey_jarvis"
+    ask WAKE_THRESHOLD "Wake threshold (0.0–1.0)"    "0.5"
 
-echo
-ask VAD_SILENCE_THRESHOLD "VAD silence threshold (int16 RMS, raise in noisy rooms)" "500"
-ask VAD_SILENCE_DURATION  "VAD silence duration (seconds)"                           "1.0"
-ask VAD_MAX_DURATION      "Max recording duration (seconds)"                         "10.0"
-ask VAD_INITIAL_TIMEOUT   "Seconds to wait for speech after wake word"               "5.0"
+    echo
+    info "Finding ALSA audio devices…"
+    echo "  --- arecord -l ---"
+    arecord -l 2>/dev/null | grep "^card" || echo "  (none found)"
+    echo "  --- aplay -l ---"
+    aplay -l 2>/dev/null | grep "^card" || echo "  (none found)"
+    echo
 
-echo
-info "Follow-up mode: after the reply the Pi listens again without the wake word."
-ask FOLLOWUP_ENABLED          "Enable follow-up mode (true/false)"        "true"
-ask FOLLOWUP_INITIAL_TIMEOUT  "Follow-up silence timeout (seconds)"       "1.5"
-ask FOLLOWUP_ONSET_CHUNKS     "Follow-up onset chunks (raise to filter TTS echo)" "3"
-ask FOLLOWUP_DRAIN_SECONDS    "Drain seconds after playback (absorbs TTS echo)"   "0.5"
+    ask ALSA_INPUT_DEVICE  "ALSA input device (mic)"    "plughw:1,0"
+    ask ALSA_OUTPUT_DEVICE "ALSA output device (speaker)" "plughw:1,0"
+    ask SPEAKER_VOLUME     "Speaker volume"              "100%"
+
+    echo
+    ask VAD_SILENCE_THRESHOLD "VAD silence threshold (int16 RMS, raise in noisy rooms)" "500"
+    ask VAD_SILENCE_DURATION  "VAD silence duration (seconds)"                           "1.0"
+    ask VAD_MAX_DURATION      "Max recording duration (seconds)"                         "10.0"
+    ask VAD_INITIAL_TIMEOUT   "Seconds to wait for speech after wake word"               "5.0"
+
+    echo
+    info "Follow-up mode: after the reply the Pi listens again without the wake word."
+    ask FOLLOWUP_ENABLED          "Enable follow-up mode (true/false)"        "true"
+    ask FOLLOWUP_INITIAL_TIMEOUT  "Follow-up silence timeout (seconds)"       "1.5"
+    ask FOLLOWUP_ONSET_CHUNKS     "Follow-up onset chunks (raise to filter TTS echo)" "3"
+    ask FOLLOWUP_DRAIN_SECONDS    "Drain seconds after playback (absorbs TTS echo)"   "0.5"
+fi
 
 # ---------------------------------------------------------------------------
 section "5 — Piper TTS model (optional local fallback)"
@@ -155,7 +171,7 @@ info "Piper is used as a local TTS fallback if the external TTS server is unavai
 warn "If you have an external TTS server (recommended), you can skip this step."
 echo
 
-TTS_MODEL_PATH=""
+if [[ -z "${TTS_MODEL_PATH:-}" ]]; then TTS_MODEL_PATH=""; fi
 if confirm "Download de_DE-thorsten-low Piper model (~16 MB)?"; then
     MODEL_DIR="$INSTALL_DIR/models"
     MODEL_BASE="de_DE-thorsten-low"
@@ -174,7 +190,9 @@ fi
 # ---------------------------------------------------------------------------
 section "6 — Write .env"
 # ---------------------------------------------------------------------------
-ENV_FILE="$INSTALL_DIR/.env"
+if ! $RECONFIGURE; then
+    info "Skipping .env write — using existing file."
+else
 
 cat > "$ENV_FILE" << EOF
 GATEWAY_URL=${GATEWAY_URL}
@@ -198,6 +216,8 @@ EOF
 
 chmod 600 "$ENV_FILE"
 info ".env written to $ENV_FILE"
+
+fi  # end RECONFIGURE block
 
 # ---------------------------------------------------------------------------
 section "7 — ALSA mixer setup (unmute WM8960)"
@@ -256,8 +276,12 @@ sudo systemctl daemon-reload
 info "Enabling service to start on boot…"
 sudo systemctl enable "$SERVICE_NAME"
 
-info "Starting service…"
-sudo systemctl start "$SERVICE_NAME"
+info "Starting (or restarting) service…"
+if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
+    sudo systemctl restart "$SERVICE_NAME"
+else
+    sudo systemctl start "$SERVICE_NAME"
+fi
 
 # ---------------------------------------------------------------------------
 section "Done"

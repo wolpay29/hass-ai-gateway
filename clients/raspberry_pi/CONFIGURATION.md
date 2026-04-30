@@ -137,6 +137,49 @@ Troubleshooting Tips
 This connects the Pi to the smart home assistant running on your PC.
 The script (`voice_client.py`) listens for a wake word, records your command, sends it to the Voice Gateway service, and speaks the reply back.
 
+### Quick Install (recommended)
+
+`install.sh` automates steps 1–8 below in a single run. It is safe to re-run on an existing installation — it will ask whether to keep or replace the existing `.env`.
+
+**From your PC** (inside the `hass-ai-gateway` project directory):
+
+```bash
+PI_IP=<your-pi-ip>   # e.g. 192.168.1.50
+scp clients/raspberry_pi/{voice_client.py,requirements.txt,install.sh} pi@$PI_IP:~/
+```
+
+**On the Pi:**
+
+```bash
+bash ~/install.sh
+```
+
+The script will:
+- Install system packages (`portaudio19-dev`, `python3-venv`, `python3-pip`)
+- Create `~/voice/` with a Python venv and all dependencies
+- Walk you through all config values interactively (with defaults)
+- Optionally download the Piper TTS model (`de_DE-thorsten-low`)
+- Configure the ALSA mixer and save it persistently
+- Install, enable, and start the `voice-client` systemd service
+
+After the script finishes:
+
+```bash
+sudo systemctl status voice-client   # check it is running
+journalctl -u voice-client -f        # watch live logs
+```
+
+To change settings later, edit `~/voice/.env` and restart the service:
+
+```bash
+nano ~/voice/.env
+sudo systemctl restart voice-client
+```
+
+---
+
+The steps below document the same process manually, in case you need to customize or troubleshoot individual parts.
+
 ### Architecture
 
 ```
