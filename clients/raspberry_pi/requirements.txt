@@ -27,3 +27,7 @@ python-dotenv>=1.0
 
 # TTS — Piper local fallback (only used when gateway returns JSON, not WAV)
 piper-tts>=1.2.0
+
+# ReSpeaker 2-Mic HAT LEDs (APA102 via SPI)
+# Required for LED status indicators — silently disabled if not installed
+spidev>=3.5

@@ -70,11 +70,37 @@ section "1 — System packages"
 info "Updating package lists…"
 sudo apt-get update -qq
 
-info "Installing portaudio19-dev, python3-venv, python3-pip…"
-sudo apt-get install -y -qq portaudio19-dev python3-venv python3-pip
+info "Installing portaudio19-dev, python3-venv, python3-pip, python3-spidev…"
+sudo apt-get install -y -qq portaudio19-dev python3-venv python3-pip python3-spidev
 
 # ---------------------------------------------------------------------------
-section "2 — Copy client files"
+section "2 — SPI interface (required for ReSpeaker LED HAT)"
+# ---------------------------------------------------------------------------
+CONFIG_TXT="/boot/firmware/config.txt"
+# Fallback for older Raspberry Pi OS versions
+[[ ! -f "$CONFIG_TXT" ]] && CONFIG_TXT="/boot/config.txt"
+
+if grep -q "^dtparam=spi=on" "$CONFIG_TXT" 2>/dev/null; then
+    info "SPI already enabled in $CONFIG_TXT"
+elif grep -q "^#dtparam=spi=on" "$CONFIG_TXT" 2>/dev/null; then
+    info "Enabling SPI in $CONFIG_TXT (uncommenting existing line)…"
+    sudo sed -i 's/^#dtparam=spi=on/dtparam=spi=on/' "$CONFIG_TXT"
+    warn "SPI enabled — a reboot is required after install for LEDs to work!"
+else
+    info "Adding dtparam=spi=on to $CONFIG_TXT…"
+    echo "dtparam=spi=on" | sudo tee -a "$CONFIG_TXT" > /dev/null
+    warn "SPI enabled — a reboot is required after install for LEDs to work!"
+fi
+
+# Check if SPI device is already available (no reboot needed)
+if ls /dev/spidev* &>/dev/null; then
+    info "SPI device found: $(ls /dev/spidev*) — no reboot needed for LEDs."
+else
+    warn "No /dev/spidev* found yet — reboot after install to activate LEDs."
+fi
+
+# ---------------------------------------------------------------------------
+section "3 — Copy client files"
 # ---------------------------------------------------------------------------
 mkdir -p "$INSTALL_DIR/models"
 
@@ -93,7 +119,7 @@ copy_file "voice_client.py"
 copy_file "requirements.txt"
 
 # ---------------------------------------------------------------------------
-section "3 — Python virtual environment"
+section "4 — Python virtual environment"
 # ---------------------------------------------------------------------------
 if [[ ! -d "$INSTALL_DIR/venv" ]]; then
     info "Creating virtual environment…"
@@ -105,13 +131,24 @@ fi
 info "Installing openwakeword (no-deps, avoids tflite conflict)…"
 "$INSTALL_DIR/venv/bin/pip" install --quiet openwakeword --no-deps
 
-info "Installing remaining requirements…"
+info "Installing remaining requirements (incl. spidev for LEDs)…"
 "$INSTALL_DIR/venv/bin/pip" install --quiet -r "$INSTALL_DIR/requirements.txt"
 
 info "Python dependencies installed successfully."
 
 # ---------------------------------------------------------------------------
-section "4 — Configuration"
+section "5 — Download openwakeword ONNX models"
+# ---------------------------------------------------------------------------
+info "Downloading built-in openwakeword models (hey_jarvis, alexa, …)…"
+"$INSTALL_DIR/venv/bin/python3" -c "
+from openwakeword.utils import download_models
+download_models()
+print('openwakeword models downloaded.')
+"
+info "Wake word models ready."
+
+# ---------------------------------------------------------------------------
+section "6 — Configuration"
 # ---------------------------------------------------------------------------
 RECONFIGURE=true
 ENV_FILE="$INSTALL_DIR/.env"
@@ -164,7 +201,7 @@ if $RECONFIGURE; then
 fi
 
 # ---------------------------------------------------------------------------
-section "5 — Piper TTS model (optional local fallback)"
+section "7 — Piper TTS model (optional local fallback)"
 # ---------------------------------------------------------------------------
 echo
 info "Piper is used as a local TTS fallback if the external TTS server is unavailable."
@@ -188,7 +225,7 @@ if confirm "Download de_DE-thorsten-low Piper model (~16 MB)?"; then
 fi
 
 # ---------------------------------------------------------------------------
-section "6 — Write .env"
+section "8 — Write .env"
 # ---------------------------------------------------------------------------
 if ! $RECONFIGURE; then
     info "Skipping .env write — using existing file."
@@ -220,7 +257,7 @@ info ".env written to $ENV_FILE"
 fi  # end RECONFIGURE block
 
 # ---------------------------------------------------------------------------
-section "7 — ALSA mixer setup (unmute WM8960)"
+section "9 — ALSA mixer setup (unmute WM8960)"
 # ---------------------------------------------------------------------------
 # Extract card number from ALSA_INPUT_DEVICE (e.g. plughw:1,0 → 1)
 ALSA_CARD=$(echo "$ALSA_INPUT_DEVICE" | grep -oP '(?<=:)\d+(?=,)' || echo "1")
@@ -248,7 +285,7 @@ info "Saving ALSA state so it survives reboot…"
 sudo alsactl store "$ALSA_CARD" 2>/dev/null || sudo alsactl store || warn "alsactl store failed — run manually after reboot"
 
 # ---------------------------------------------------------------------------
-section "8 — systemd service"
+section "10 — systemd service"
 # ---------------------------------------------------------------------------
 info "Writing $SERVICE_FILE …"
 
@@ -295,6 +332,12 @@ else
 fi
 
 echo
+if ! ls /dev/spidev* &>/dev/null; then
+    echo -e "  ${YELLOW}⚠ SPI not yet active — reboot to enable LEDs:${NC}"
+    echo "    sudo reboot"
+    echo
+fi
+
 echo "  Useful commands:"
 echo "    sudo systemctl status $SERVICE_NAME     — check status"
 echo "    journalctl -u $SERVICE_NAME -f          — live logs"
