@@ -30,7 +30,7 @@ from core.config import (
     HISTORY_INCLUDE_ASSISTANT,
     LMSTUDIO_NO_THINK,
 )
-from core.llm import get_recent_user_messages, get_recent_assistant_replies, _load_memory
+from core.llm import get_history_snapshot, _load_memory
 
 logger = logging.getLogger(__name__)
 
@@ -48,18 +48,41 @@ def _load_prompts() -> dict:
 
 
 def _build_history_block(chat_id: int) -> str:
+    """Build a chronologically-ordered history block for the rewriter prompt.
+
+    Uses get_history_snapshot() to get messages in correct interleaved order
+    (user, assistant, user, assistant, ...) so the LLM can properly resolve
+    pronouns and back-references from the most recent context.
+    """
     if chat_id == 0:
         return "(leer)"
 
+    snapshot = get_history_snapshot(chat_id)
+    if not snapshot:
+        return "(leer)"
+
     lines: list[str] = []
-    user_msgs = get_recent_user_messages(chat_id)
-    assistant_msgs = (
-        get_recent_assistant_replies(chat_id) if HISTORY_INCLUDE_ASSISTANT else []
-    )
-    for u in user_msgs:
-        lines.append(f"Nutzer: {u}")
-    for a in assistant_msgs:
-        lines.append(f"Assistent: {a}")
+    for m in snapshot:
+        role = m.get("role", "")
+        content = m.get("content", "")
+        if role == "user":
+            lines.append(f"Nutzer: {content}")
+        elif role == "assistant" and HISTORY_INCLUDE_ASSISTANT:
+            # Extract the human-readable reply from raw JSON if present
+            reply = ""
+            match = re.search(r"\{.*\}", content, re.DOTALL)
+            if match:
+                try:
+                    reply = json.loads(match.group()).get("reply", "").strip()
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+            # Fall back to raw content (e.g. clarification questions, smalltalk)
+            if not reply:
+                reply = content.strip()
+            # Strip execution summaries appended after the JSON
+            reply = reply.split("\nausgefuehrt:")[0].strip()
+            if reply:
+                lines.append(f"Assistent: {reply}")
 
     return "\n".join(lines) if lines else "(leer)"
 
@@ -90,8 +113,9 @@ def rewrite_query(transcript: str, chat_id: int = 0) -> dict:
 
     try:
         prompts = _load_prompts()
+        history_block = _build_history_block(chat_id)
         system_prompt = prompts["query_rewriter"].format(
-            history=_build_history_block(chat_id),
+            history=history_block,
             transcript=transcript,
         )
         memory = _load_memory("pre_llm")
