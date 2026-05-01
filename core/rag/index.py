@@ -292,6 +292,35 @@ def query(transcript: str) -> list[dict]:
     ]
 
 
+def lookup_by_ids(entity_ids: list[str]) -> list[dict]:
+    """Return entities by exact ID — used to augment RAG results with history context.
+
+    Returns them in the same format as query() so they can be merged into the
+    candidates list without any conversion on the caller side.
+    """
+    if not entity_ids:
+        return []
+    db_path = Path(RAG_DB_PATH)
+    if not db_path.exists():
+        return []
+    conn = store.get_connection(RAG_DB_PATH)
+    try:
+        rows = store.lookup_by_entity_ids(conn, entity_ids)
+    finally:
+        conn.close()
+    return [
+        {
+            "entity_id": r["entity_id"],
+            "friendly_name": r.get("friendly_name", ""),
+            "domain": r.get("domain", ""),
+            "actions": [a for a in (r.get("actions") or "").split(",") if a],
+            "meta": r.get("curated_meta", ""),
+            "distance": 0.0,
+        }
+        for r in rows
+    ]
+
+
 def status() -> dict:
     """Return index statistics for display in /rag_rebuild replies."""
     db_path = Path(RAG_DB_PATH)

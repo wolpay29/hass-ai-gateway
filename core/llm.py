@@ -141,7 +141,7 @@ def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
             "model": LMSTUDIO_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                *history,
+                *_clean_history_for_llm(history),
                 {"role": "user", "content": transcript}
             ],
             "temperature": LMSTUDIO_TEMPERATURE
@@ -222,6 +222,63 @@ def get_recent_user_messages(chat_id: int) -> list[str]:
     if LLM_HISTORY_SIZE <= 0 or chat_id == 0:
         return []
     return [m["content"] for m in _history.get(chat_id, []) if m["role"] == "user"]
+
+
+def _clean_history_for_llm(history: list) -> list:
+    """Return history with assistant turns converted to plain German text.
+
+    Raw LLM JSON in assistant turns confuses small models — they start echoing
+    'reply:' and 'action:' literally in their own reply text. Extracting just
+    the natural-language reply (and any appended execution summary) fixes this.
+    """
+    cleaned = []
+    for m in history:
+        if m["role"] != "assistant":
+            cleaned.append(m)
+            continue
+        content = m["content"]
+        reply_text = ""
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if match:
+            try:
+                reply_text = (json.loads(match.group()).get("reply") or "").strip()
+            except (json.JSONDecodeError, AttributeError):
+                pass
+            trailing = content[match.end():].strip()
+        else:
+            trailing = content.strip()
+        if not reply_text:
+            reply_text = trailing
+            trailing = ""
+        text = reply_text + ("\n" + trailing if trailing else "")
+        cleaned.append({**m, "content": text or content})
+    return cleaned
+
+
+def get_history_entity_ids(chat_id: int) -> list[str]:
+    """Return entity_ids that appeared in recent assistant actions (oldest first).
+
+    Used to augment RAG candidates so follow-up commands that use pronouns
+    ('es', 'er', 'das') can still resolve to the correct entity even when the
+    rewriter query misses it.
+    """
+    if LLM_HISTORY_SIZE <= 0 or chat_id == 0:
+        return []
+    seen: list[str] = []
+    for m in _history.get(chat_id, []):
+        if m["role"] != "assistant":
+            continue
+        match = re.search(r'\{.*\}', m["content"], re.DOTALL)
+        if not match:
+            continue
+        try:
+            for act in json.loads(match.group()).get("actions", []):
+                eid = act.get("entity_id")
+                if eid and eid not in seen:
+                    seen.append(eid)
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    return seen
 
 
 def get_recent_assistant_replies(chat_id: int) -> list[str]:
@@ -323,7 +380,7 @@ def smalltalk_reply(transcript: str, chat_id: int = 0) -> str | None:
             "model": LMSTUDIO_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                *history,
+                *_clean_history_for_llm(history),
                 {"role": "user", "content": transcript},
             ],
             "temperature": LMSTUDIO_TEMPERATURE,
@@ -465,7 +522,7 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
             "model": LMSTUDIO_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                *history,
+                *_clean_history_for_llm(history),
                 {"role": "user", "content": transcript},
             ],
             "temperature": LMSTUDIO_TEMPERATURE,
@@ -517,10 +574,14 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
 
         # History speichern (gleiche Logik wie parse_command).
         # Assistant-Turn nur speichern wenn HISTORY_INCLUDE_ASSISTANT=true.
+        # Wir schreiben den validierten JSON (ohne halluzinierte Entities) in die
+        # History, nicht den rohen content — so tauchen abgelehnte entity_ids
+        # nicht in get_history_entity_ids() auf.
         if LLM_HISTORY_SIZE > 0 and chat_id != 0:
             history.append({"role": "user", "content": transcript})
             if HISTORY_INCLUDE_ASSISTANT:
-                history.append({"role": "assistant", "content": content})
+                history_content = json.dumps(result, ensure_ascii=False)
+                history.append({"role": "assistant", "content": history_content})
             max_entries = LLM_HISTORY_SIZE * (2 if HISTORY_INCLUDE_ASSISTANT else 1)
             if len(history) > max_entries:
                 history = history[-max_entries:]
@@ -575,7 +636,7 @@ def parse_command_with_states(transcript: str, states: list[dict], chat_id: int 
             "model": LMSTUDIO_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                *history,
+                *_clean_history_for_llm(history),
                 {"role": "user", "content": transcript},
             ],
             "temperature": LMSTUDIO_TEMPERATURE,

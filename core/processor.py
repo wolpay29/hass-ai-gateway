@@ -41,6 +41,7 @@ from core.llm import (
     append_execution_summary,
     append_clarification_turn,
     get_history_snapshot,
+    get_history_entity_ids,
 )
 from core.llm_lmstudio import fallback_via_mcp
 from core.ha import call_service, get_all_states
@@ -96,9 +97,26 @@ def _resolve_command(transcript: str, embed_query: str, chat_id: int) -> dict | 
     """
     if RAG_ENABLED:
         try:
-            from core.rag.index import query as rag_query
+            from core.rag.index import query as rag_query, lookup_by_ids
 
             rag_entities = rag_query(embed_query)
+
+            # Augment with entities from recent conversation history so that
+            # follow-up commands using pronouns ("es", "er", "das") can still
+            # resolve to the correct entity even when the RAG query misses it.
+            history_ids = get_history_entity_ids(chat_id)
+            if history_ids:
+                existing_ids = {e["entity_id"] for e in rag_entities}
+                missing = [eid for eid in history_ids if eid not in existing_ids]
+                if missing:
+                    extra = lookup_by_ids(missing)
+                    if extra:
+                        logger.info(
+                            f"[Processor] Adding {len(extra)} history entity(s) to RAG candidates: "
+                            f"{[e['entity_id'] for e in extra]}"
+                        )
+                        rag_entities = rag_entities + extra
+
             if rag_entities:
                 logger.info(f"[Processor] RAG path | {len(rag_entities)} candidates")
                 parsed = parse_command_rag(transcript, rag_entities, chat_id=chat_id)

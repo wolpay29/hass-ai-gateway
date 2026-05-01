@@ -130,6 +130,18 @@ def search(conn: sqlite3.Connection, query_vec: list[float], k: int) -> list[dic
     return results
 
 
+def lookup_by_entity_ids(conn: sqlite3.Connection, entity_ids: list[str]) -> list[dict]:
+    """Return entity records for the given entity_ids."""
+    if not entity_ids:
+        return []
+    placeholders = ",".join("?" * len(entity_ids))
+    rows = conn.execute(
+        f"SELECT * FROM entities WHERE entity_id IN ({placeholders})",
+        entity_ids,
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def get_entity_count(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
 
