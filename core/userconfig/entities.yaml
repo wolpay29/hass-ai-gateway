@@ -4,11 +4,17 @@ entities:
   # Each entry tells the gateway which entities exist, what they can do,
   # and which spoken / typed keywords should match them.
   #
+  # Status queries are always available - the gateway pre-fetches the live
+  # state of every entity in this list and shows it to the LLM. You don't
+  # need a "get_state" action; just list the actions that change something.
+  #
   # Fields:
   #   id          - exact HA entity_id (e.g. light.living_room)
   #   description - human-readable label (used in LLM prompts)
   #   keywords    - list of words/phrases that map to this entity (STT variants, room names, ...)
-  #   actions     - allowed service calls: turn_on | turn_off | toggle | get_state | trigger
+  #   actions     - allowed service calls: turn_on | turn_off | toggle | trigger
+  #                 | set_temperature | set_cover_position | set_hvac_mode | set_percentage
+  #                 (sensors / binary_sensors don't need actions - leave the list empty)
   #   domain      - HA domain (light, switch, sensor, automation, climate, ...)
   #   meta        - optional extra hint for the LLM (leave "" if not needed)
   #
@@ -18,7 +24,7 @@ entities:
   #   - id: light.living_room
   #     description: "Living room light"
   #     keywords: ["living room", "lounge", "downstairs light"]
-  #     actions: ["turn_on", "turn_off", "toggle", "get_state"]
+  #     actions: ["turn_on", "turn_off", "toggle"]
   #     domain: light
   #     meta: ""
   #
@@ -32,6 +38,20 @@ entities:
   #   - id: sensor.outdoor_temperature
   #     description: "Outdoor temperature sensor"
   #     keywords: ["outside temperature", "how warm outside"]
-  #     actions: ["get_state"]
+  #     actions: []
   #     domain: sensor
+  #     meta: ""
+  #
+  #   - id: climate.living_room
+  #     description: "Living room thermostat"
+  #     keywords: ["living room heating", "thermostat"]
+  #     actions: ["set_temperature", "set_hvac_mode"]
+  #     domain: climate
+  #     meta: ""
+  #
+  #   - id: automation.gate_open
+  #     description: "Open the front gate"
+  #     keywords: ["gate", "open gate", "front gate"]
+  #     actions: ["trigger"]
+  #     domain: automation
   #     meta: ""

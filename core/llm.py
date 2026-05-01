@@ -112,13 +112,66 @@ def _build_prompt(key: str, memory: str | None = None, **kwargs) -> str:
     return text
 
 
+def _format_curated_entity_with_state(e: dict, ha_state: dict | None) -> str:
+    """Compact entity line for the primary-parser prompt with live state.
+
+    Skips the `state:` field for pure trigger domains (script, scene, button)
+    where the value is meaningless to the user, keeping the prompt compact.
+    """
+    eid = e["id"]
+    domain = e.get("domain") or (eid.split(".", 1)[0] if "." in eid else "")
+    keywords = ", ".join(e.get("keywords", []))
+    actions = ", ".join(e.get("actions", [])) or "-"
+    description = (e.get("description") or "").strip()
+    meta = (e.get("meta") or "").strip()
+
+    parts: list[str] = [f"- {eid}"]
+    if description:
+        parts.append(f"name: {description}")
+    if keywords:
+        parts.append(f"keywords: {keywords}")
+
+    if domain in _STATEFUL_DOMAINS and ha_state is not None:
+        attrs = ha_state.get("attributes", {}) or {}
+        unit = attrs.get("unit_of_measurement") or ""
+        human = _humanize_state(domain, ha_state.get("state"))
+        if unit and human not in ("an", "aus", "aktiv", "inaktiv", "unbekannt"):
+            state_str = f"{human} {unit}".strip()
+        else:
+            state_str = human
+
+        relevant = _RELEVANT_ATTRS_BY_DOMAIN.get(domain, ())
+        attr_parts = [f"{k}={v}" for k in relevant if (v := attrs.get(k)) not in (None, "")]
+        attrs_str = (" | " + ", ".join(attr_parts)) if attr_parts else ""
+        parts.append(f"state: {state_str}{attrs_str}")
+    elif domain in _STATEFUL_DOMAINS:
+        parts.append("state: unbekannt")
+
+    parts.append(f"actions: {actions}")
+    if meta:
+        parts.append(f"note: {meta}")
+    return " | ".join(parts)
+
+
 def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
     entities = _load_entities()
     valid_ids = {e["id"] for e in entities}
 
+    # Live states parallel for all curated entities so the parser can answer
+    # status questions directly (no get_state -> needs_fallback round-trip).
+    # Stateless domains (script/scene/button) are still in the list, just
+    # without a `state:` field.
+    from core.ha import get_states_bulk
+    stateful_ids = [
+        e["id"] for e in entities
+        if (e.get("domain") or (e["id"].split(".", 1)[0] if "." in e["id"] else "")) in _STATEFUL_DOMAINS
+    ]
+    states_map: dict[str, dict] = get_states_bulk(stateful_ids) if stateful_ids else {}
+    if stateful_ids:
+        logger.info(f"[LLM] States geholt: {len(states_map)}/{len(stateful_ids)}")
+
     entity_list = "\n".join(
-        f'- {e["id"]} | keywords: {", ".join(e.get("keywords", []))} | actions: {", ".join(e["actions"])}'
-        for e in entities
+        _format_curated_entity_with_state(e, states_map.get(e["id"])) for e in entities
     )
 
     system_prompt = _build_prompt("primary_parser", memory="post_llm", entity_list=entity_list)
@@ -160,17 +213,32 @@ def parse_command(transcript: str, chat_id: int = 0) -> dict | None:
             return None
         logger.info(f"[LLM] Parsed: {result}")
 
+        clarification_q = (result.get("clarification_question") or "").strip()
+        if clarification_q:
+            logger.info(f"[LLM] Clarification vom Parser: '{clarification_q}'")
+        result["clarification_question"] = clarification_q
+
         # Alle entity_ids gegen entities.yaml validieren.
-        # "needs_fallback" ist ein Steuersignal, kein echter HA-Aufruf — immer durchlassen.
-        validated_actions = []
+        # "needs_fallback" ist ein Steuersignal, kein echter HA-Aufruf - immer durchlassen.
+        validated_actions: list[dict] = []
         for act in result.get("actions", []):
             if act.get("action") == "needs_fallback":
                 validated_actions.append(act)
                 logger.info(f"[LLM] needs_fallback fuer '{act.get('entity_id', '?')}'")
-            elif act.get("entity_id") and act["entity_id"] in valid_ids:
-                validated_actions.append(act)
-            elif act.get("entity_id"):
-                logger.warning(f"[LLM] Halluzinierte Entity '{act['entity_id']}' – wird ignoriert")
+                continue
+            eid = act.get("entity_id")
+            if not eid:
+                continue
+            if eid not in valid_ids:
+                logger.warning(f"[LLM] Halluzinierte Entity '{eid}' - wird ignoriert")
+                continue
+            if not act.get("domain") and "." in eid:
+                act["domain"] = eid.split(".", 1)[0]
+            sd = act.get("service_data")
+            if sd is not None and not isinstance(sd, dict):
+                logger.warning(f"[LLM] service_data fuer '{eid}' kein Dict - verwerfe")
+                act.pop("service_data", None)
+            validated_actions.append(act)
 
         # Limit anwenden und ignorierte Actions markieren
         if MAX_ACTIONS_PER_COMMAND > 0 and len(validated_actions) > MAX_ACTIONS_PER_COMMAND:
@@ -425,6 +493,16 @@ _RELEVANT_ATTRS_BY_DOMAIN: dict[str, tuple[str, ...]] = {
     "media_player": ("media_title", "media_artist", "volume_level", "source"),
     "weather": ("temperature", "humidity", "wind_speed"),
 }
+
+# Domains where the live `state` value carries useful information for the LLM
+# (status queries, conditional logic). For pure trigger domains like script /
+# scene / button the state is meaningless to the user and we omit it from the
+# prompt to keep the entity list compact.
+_STATEFUL_DOMAINS: frozenset[str] = frozenset({
+    "light", "switch", "sensor", "binary_sensor", "climate", "cover", "fan",
+    "lock", "media_player", "automation", "input_boolean", "input_number",
+    "input_select", "group", "weather", "person", "device_tracker", "sun",
+})
 
 
 def _humanize_state(domain: str, state: str | None) -> str:

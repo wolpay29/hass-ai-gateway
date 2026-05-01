@@ -1,5 +1,6 @@
 import fnmatch
 import logging
+import re
 from pathlib import Path
 
 import requests
@@ -7,7 +8,7 @@ import yaml
 
 from core.config import (
     HA_URL, HA_TOKEN,
-    RAG_DB_PATH, RAG_TOP_K, RAG_KEYWORD_BOOST, RAG_EMBED_DIM,
+    RAG_DB_PATH, RAG_TOP_K, RAG_KEYWORD_BOOST, RAG_DISTANCE_THRESHOLD, RAG_EMBED_DIM,
     USERCONFIG_DIR,
 )
 from core.rag import store
@@ -263,18 +264,29 @@ def query(transcript: str) -> list[dict]:
         conn.close()
 
     # Keyword boost: curated keywords that literally appear in the transcript
-    # get a lower effective distance (lower = closer = better).
+    # get a lower effective distance (lower = closer = better). Word-boundary
+    # match so short keywords like "an" don't accidentally match "Banane".
     transcript_lower = transcript.lower()
     for r in results:
         kws = [k.strip().lower() for k in r.get("curated_keywords", "").split(",") if k.strip()]
-        if kws and any(kw in transcript_lower for kw in kws):
+        if kws and any(re.search(rf"\b{re.escape(kw)}\b", transcript_lower) for kw in kws):
             r["distance"] *= 1.0 - RAG_KEYWORD_BOOST
 
     results.sort(key=lambda x: x["distance"])
 
+    pre_filter_count = len(results)
+    if RAG_DISTANCE_THRESHOLD > 0 and results:
+        best = results[0]
+        filtered = [r for r in results if r["distance"] <= RAG_DISTANCE_THRESHOLD]
+        if not filtered:
+            filtered = [best]   # safety net - best candidate stays even when over threshold
+        results = filtered
+
+    top_with_dist = [(r['entity_id'], round(r['distance'], 3)) for r in results[:5]]
     logger.info(
         f"[RAG Index] Query '{transcript}' | "
-        f"Top-{len(results)}: {[r['entity_id'] for r in results[:5]]}"
+        f"{pre_filter_count} -> {len(results)} (threshold={RAG_DISTANCE_THRESHOLD}) | "
+        f"Top-5: {top_with_dist}"
     )
 
     # Convert to the format that parse_command_rag() expects
@@ -335,3 +347,16 @@ def status() -> dict:
         }
     finally:
         conn.close()
+
+
+if __name__ == "__main__":
+    # CLI entry point: `python -m core.rag.index`
+    # Inside the addon container: `docker exec addon_<slug> python -m core.rag.index`
+    logging.basicConfig(
+        format="%(asctime)s [rag-cli] %(levelname)s %(message)s",
+        level=logging.INFO,
+    )
+    count = build()
+    info = status()
+    print(f"RAG-Index Rebuild abgeschlossen: {count} Entities indiziert")
+    print(f"Zuletzt indiziert: {info.get('last_indexed', '?')}")

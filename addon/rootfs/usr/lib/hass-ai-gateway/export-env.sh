@@ -48,6 +48,7 @@ export TTS_EXTERNAL_VOICE="$(bashio::config 'tts.external_voice')"
 export RAG_ENABLED="$(bashio::config 'rag.enabled')"
 export RAG_DB_PATH=/data/rag/entities.sqlite
 export RAG_TOP_K="$(bashio::config 'rag.top_k')"
+export RAG_DISTANCE_THRESHOLD="$(bashio::config 'rag.distance_threshold')"
 export RAG_KEYWORD_BOOST="$(bashio::config 'rag.keyword_boost')"
 export RAG_EMBED_URL="$(bashio::config 'rag.embed_url')"
 export RAG_EMBED_MODEL="$(bashio::config 'rag.embed_model')"

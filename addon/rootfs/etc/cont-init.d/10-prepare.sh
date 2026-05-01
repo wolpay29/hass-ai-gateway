@@ -12,7 +12,7 @@ bashio::log.info "hass-ai-gateway: data dir ready (/data/voice, /data/rag)"
 # edits survive addon updates.
 USER_DIR=/config/userconfig
 mkdir -p "${USER_DIR}"
-for f in entities.yaml entities_blacklist.yaml pre_llm_memory.md post_llm_memory.md; do
+for f in entities.yaml entities_blacklist.yaml pre_llm_memory.md post_llm_memory.md whisper_vocabulary.md; do
     if [ ! -f "${USER_DIR}/${f}" ]; then
         cp "/opt/gateway/core/userconfig/${f}" "${USER_DIR}/${f}"
         bashio::log.info "seeded ${USER_DIR}/${f} from defaults"
@@ -52,6 +52,9 @@ fi
 if bashio::config.true 'rag.enabled'; then
     bashio::config.has_value 'rag.embed_url' \
         || bashio::log.notice "rag.embed_url empty — falling back to lmstudio.url for embeddings"
+    if [ ! -s /data/rag/entities.sqlite ]; then
+        bashio::log.notice "RAG aktiv, aber Index noch leer - Rebuild ueber Telegram /rag_rebuild oder POST /rag_rebuild starten (Primary-Parser uebernimmt solange als Backup)"
+    fi
 fi
 
 if bashio::config.true 'llm_preprocessor.enabled'; then

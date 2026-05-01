@@ -24,10 +24,11 @@ on first start and your edits persist across add-on updates.
 
 | File | What it does |
 |------|--------------|
-| `userconfig/entities.yaml` | Curated entity catalogue (legacy parser + RAG keyword/meta overlay) |
+| `userconfig/entities.yaml` | Curated entity catalogue (primary parser + RAG keyword/meta overlay) |
 | `userconfig/entities_blacklist.yaml` | Entity-id patterns excluded from RAG indexing |
 | `userconfig/pre_llm_memory.md` | Free-text hints appended to the query-rewriter prompt (typo/STT fixes, pronoun rules) |
 | `userconfig/post_llm_memory.md` | Free-text hints appended to all parser prompts (common errors, preferences, never-do rules) |
+| `userconfig/whisper_vocabulary.md` | Vocabulary hints sent as Whisper `initial_prompt` (room names, smart-home jargon, names) |
 | `menus.yaml` | Telegram bot menus, buttons, and action mappings |
 
 ### `entities.yaml`
@@ -36,12 +37,17 @@ Each entry exposes one HA entity to the gateway. The `keywords` list drives both
 the legacy keyword parser and the RAG index; `meta` adds an extra hint to the LLM
 prompt for tricky entities.
 
+Status queries don't need a `get_state` action - the gateway pre-fetches the
+live state of every entity in this list and shows it to the LLM, so any
+question about the current value works automatically. Just list the actions
+that change something.
+
 ```yaml
 entities:
   - id: light.living_room
     description: "Living room light"
     keywords: ["living room", "lounge", "downstairs light"]
-    actions: ["turn_on", "turn_off", "toggle", "get_state"]
+    actions: ["turn_on", "turn_off", "toggle"]
     domain: light
     meta: ""
 
@@ -55,8 +61,15 @@ entities:
   - id: sensor.outdoor_temperature
     description: "Outdoor temperature"
     keywords: ["outside temperature", "how warm outside"]
-    actions: ["get_state"]
+    actions: []
     domain: sensor
+    meta: ""
+
+  - id: climate.living_room
+    description: "Living room thermostat"
+    keywords: ["living room heating", "thermostat"]
+    actions: ["set_temperature", "set_hvac_mode"]
+    domain: climate
     meta: ""
 ```
 
@@ -89,7 +102,7 @@ Use it for STT typo fixes and pronoun rules.
 - "upstairs" alone is ambiguous — leave as-is, ask for clarification
 ```
 
-**`post_llm_memory.md`** is appended to every parser prompt (legacy, RAG, fallback).
+**`post_llm_memory.md`** is appended to every parser prompt (primary, RAG, fallback).
 Use it for action preferences and never-do rules.
 
 ```markdown
@@ -100,8 +113,25 @@ Use it for action preferences and never-do rules.
 - Never trigger automation.vacation_mode — always ask first
 ```
 
+### `whisper_vocabulary.md`
+
+Free-text Markdown sent to the Whisper STT model as `initial_prompt`. Whisper
+prefers tokens that appear in the prompt, so this dramatically improves the
+recognition of German smart-home terms, room names, and personal names. HTML
+comments are stripped before use - leaving only the comment block disables
+the feature (Whisper default behaviour).
+
+```markdown
+Wohnzimmer, Schlafzimmer, Kueche, Erdgeschoss, Obergeschoss.
+Rolladen, Wallbox, Photovoltaik, Wechselrichter, Pool-Pumpe.
+Paul, Max, Sophie.
+```
+
+Restart the add-on after editing.
+
 After editing: restart the add-on. After editing `entities.yaml` while RAG is
-enabled, also send `/rag_rebuild` in the Telegram chat.
+enabled, also send `/rag_rebuild` in the Telegram chat (or `POST /rag_rebuild`
+to the voice gateway, see "RAG rebuild from HA" below).
 
 All other settings (tokens, URLs, model names, RAG/fallback toggles) are in the
 **Configuration** tab below — no file editing required.
@@ -217,22 +247,52 @@ of audio.
 
 ```yaml
 rag:
-  enabled: false
+  enabled: true
   top_k: 15
+  distance_threshold: 0.0   # 0 = aus; example ~0.5 for nomic-embed-text-v2
   keyword_boost: 0.3
   embed_url: ""        # blank = reuse lmstudio.url
   embed_model: "text-embedding-nomic-embed-text-v2-moe"
   embed_dim: 768
 ```
 
+`distance_threshold` drops candidates whose embedding distance is above the
+value (the best candidate is always kept as a safety net). `top_k` remains a
+hard upper bound; the stricter of the two limits wins. With `0` (default)
+only `top_k` applies - identical to previous behaviour. To tune: trigger a
+`/rag_rebuild`, send a voice command, look at the `Top-5: [(eid, dist), ...]`
+log line and pick a threshold slightly above the typical correct-hit
+distance.
+
 The SQLite vector index lives at `/data/rag/entities.sqlite`. Trigger a
-rebuild from Telegram with `/rag_rebuild`.
+rebuild from Telegram with `/rag_rebuild`, from a terminal with
+`docker exec addon_<slug> python -m core.rag.index`, or via the voice
+gateway endpoint:
+
+```bash
+curl -X POST http://<addon-ip>:8765/rag_rebuild \
+     -H "X-Api-Key: $GATEWAY_API_KEY"
+```
+
+You can also wire that into HA via `rest_command`:
+
+```yaml
+rest_command:
+  rag_rebuild:
+    url: "http://localhost:8765/rag_rebuild"
+    method: POST
+    headers:
+      X-Api-Key: "<your gateway api key>"
+```
+
+Then call `service: rest_command.rag_rebuild` from any HA automation,
+script, or button card.
 
 ### `llm_preprocessor`
 
 ```yaml
 llm_preprocessor:
-  enabled: false
+  enabled: true
   url: ""              # blank = reuse lmstudio.url
   api_key: ""          # blank = reuse lmstudio.api_key
   model: ""            # blank = reuse lmstudio.model

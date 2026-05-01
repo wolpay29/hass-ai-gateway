@@ -52,7 +52,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from core.voice import transcribe_audio
-from core.config import BOT_TOKEN, MY_CHAT_ID, TTS_EXTERNAL_URL, TTS_EXTERNAL_VOICE
+from core.config import BOT_TOKEN, MY_CHAT_ID, TTS_EXTERNAL_URL, TTS_EXTERNAL_VOICE, RAG_ENABLED
 from core.processor import process_transcript_split
 
 logging.basicConfig(
@@ -207,6 +207,37 @@ def _reply_or_wav(result: dict, tts: bool) -> Response | JSONResponse:
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "tts": bool(TTS_EXTERNAL_URL)}
+
+
+@app.post("/rag_rebuild")
+def rag_rebuild_endpoint(
+    x_api_key: str = Header(default=""),
+) -> JSONResponse:
+    """Trigger a RAG index rebuild.
+
+    Same effect as the Telegram `/rag_rebuild` command but callable from a
+    terminal (`curl`) or Home Assistant via `rest_command`. Synchronous - the
+    response only returns once the rebuild is finished.
+    """
+    _auth(x_api_key)
+    if not RAG_ENABLED:
+        return JSONResponse(
+            status_code=400,
+            content={"status": "disabled", "error": "RAG_ENABLED=false"},
+        )
+    try:
+        from core.rag.index import build as rag_build, status as rag_status
+        count = rag_build()
+        info = rag_status()
+        logger.info(f"[Gateway] /rag_rebuild OK: {count} entities")
+        return JSONResponse({
+            "status": "ok",
+            "entities": count,
+            "last_indexed": info.get("last_indexed"),
+        })
+    except Exception as e:
+        logger.error(f"[Gateway] /rag_rebuild failed: {e}")
+        return JSONResponse(status_code=500, content={"status": "error", "error": str(e)})
 
 
 @app.post("/audio")

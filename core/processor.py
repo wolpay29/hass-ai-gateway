@@ -127,7 +127,10 @@ def _resolve_command(transcript: str, embed_query: str, chat_id: int) -> dict | 
         except Exception as e:
             logger.error(f"[Processor] RAG failed: {e} — legacy path")
 
-    return parse_command(transcript, chat_id=chat_id)
+    parsed = parse_command(transcript, chat_id=chat_id)
+    if parsed and parsed.get("clarification_question") and not parsed.get("actions"):
+        return {"_clarify": parsed["clarification_question"]}
+    return parsed
 
 
 def _build_embed_query(transcript: str, chat_id: int) -> tuple[str, str]:
@@ -207,11 +210,6 @@ def process_transcript_split(
     reply = command.get("reply", "")
     actions = command.get("actions", [])
     fallback_states: list[dict] = []
-
-    for a in actions:
-        if a.get("action") == "get_state":
-            logger.info(f"[Processor] Legacy get_state '{a.get('entity_id')}' -> needs_fallback")
-            a["action"] = "needs_fallback"
 
     if any(a.get("action") == "needs_fallback" for a in actions):
         if FALLBACK_MODE == 1:

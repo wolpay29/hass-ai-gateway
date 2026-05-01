@@ -106,6 +106,10 @@ else:
     RAG_DB_PATH = _RAG_DB_DEFAULT
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "15"))
 RAG_KEYWORD_BOOST = float(os.getenv("RAG_KEYWORD_BOOST", "0.3"))
+# Wenn > 0: Kandidaten mit Distance > RAG_DISTANCE_THRESHOLD werden verworfen
+# (mindestens der beste Kandidat bleibt aber immer erhalten). Wirkt zusaetzlich
+# zu RAG_TOP_K - das jeweils strengere Limit greift. Default 0.0 = aus.
+RAG_DISTANCE_THRESHOLD = float(os.getenv("RAG_DISTANCE_THRESHOLD", "0.0"))
 
 # Embedding model host — separate from chat LM Studio so you can use a different
 # server for embeddings if you want. Defaults fall back to the chat LM Studio.
