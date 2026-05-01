@@ -273,17 +273,35 @@ distance.
 
 The SQLite vector index lives at `/data/rag/entities.sqlite`. Trigger a
 rebuild from Telegram with `/rag_rebuild`, from a terminal with
-`docker exec addon_<slug> python -m core.rag.index`, or via the voice
-gateway endpoint:
+`docker exec addon_<slug> python -m core.rag.index`, or from Home
+Assistant (see below).
 
-```bash
-curl -X POST http://<addon-ip>:8765/rag_rebuild \
-     -H "X-Api-Key: $GATEWAY_API_KEY"
-```
+#### RAG rebuild button + status sensors in HA
 
-You can also wire that into HA via `rest_command`:
+Add the following blocks to your `configuration.yaml`. Replace
+`<your gateway api key>` with the value you set in
+`voice_gateway.api_key` (or remove the `headers:` block if you left it
+empty).
 
 ```yaml
+# --- 1. Status sensor (polls every 60 s, no rebuild triggered) -----------
+rest:
+  - resource: "http://localhost:8765/rag_status"
+    scan_interval: 60
+    headers:
+      X-Api-Key: "<your gateway api key>"
+    sensor:
+      - name: "RAG Index Entities"
+        unique_id: rag_index_entities
+        value_template: "{{ value_json.count }}"
+        unit_of_measurement: "entities"
+        icon: mdi:database-search
+      - name: "RAG Last Indexed"
+        unique_id: rag_last_indexed
+        value_template: "{{ value_json.last_indexed }}"
+        icon: mdi:clock-outline
+
+# --- 2. Rebuild command --------------------------------------------------
 rest_command:
   rag_rebuild:
     url: "http://localhost:8765/rag_rebuild"
@@ -292,8 +310,27 @@ rest_command:
       X-Api-Key: "<your gateway api key>"
 ```
 
-Then call `service: rest_command.rag_rebuild` from any HA automation,
-script, or button card.
+Restart HA once after adding these, then add a card to any dashboard:
+
+```yaml
+type: entities
+title: RAG Index
+entities:
+  - entity: sensor.rag_index_entities
+  - entity: sensor.rag_last_indexed
+  - type: button
+    name: Rebuild starten
+    tap_action:
+      action: perform-action
+      perform_action: rest_command.rag_rebuild
+      data: {}
+```
+
+When the rebuild finishes (takes 10–60 s depending on entity count and
+embedding server speed) a **persistent notification** appears in the HA
+bell menu showing the indexed entity count and timestamp. No manual
+sensor refresh needed — the next automatic poll updates the sensor
+values within 60 s.
 
 ### `llm_preprocessor`
 

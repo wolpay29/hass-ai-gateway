@@ -209,6 +209,27 @@ def health() -> dict:
     return {"status": "ok", "tts": bool(TTS_EXTERNAL_URL)}
 
 
+@app.get("/rag_status")
+def rag_status_endpoint(
+    x_api_key: str = Header(default=""),
+) -> JSONResponse:
+    """Return current RAG index statistics without triggering a rebuild.
+
+    Suitable for polling from HA via a `rest` sensor.
+    """
+    _auth(x_api_key)
+    if not RAG_ENABLED:
+        return JSONResponse({"enabled": False, "exists": False, "count": 0, "last_indexed": None})
+    from core.rag.index import status as rag_status
+    info = rag_status()
+    return JSONResponse({
+        "enabled": True,
+        "exists": info.get("exists", False),
+        "count": info.get("count", 0),
+        "last_indexed": info.get("last_indexed"),
+    })
+
+
 @app.post("/rag_rebuild")
 def rag_rebuild_endpoint(
     x_api_key: str = Header(default=""),
@@ -216,8 +237,10 @@ def rag_rebuild_endpoint(
     """Trigger a RAG index rebuild.
 
     Same effect as the Telegram `/rag_rebuild` command but callable from a
-    terminal (`curl`) or Home Assistant via `rest_command`. Synchronous - the
-    response only returns once the rebuild is finished.
+    terminal (`curl`) or Home Assistant via `rest_command`. Synchronous — the
+    response only returns once the rebuild is finished. On completion a HA
+    persistent notification is created so the result is visible immediately
+    without polling.
     """
     _auth(x_api_key)
     if not RAG_ENABLED:
@@ -227,9 +250,15 @@ def rag_rebuild_endpoint(
         )
     try:
         from core.rag.index import build as rag_build, status as rag_status
+        from core.ha import notify_persistent
         count = rag_build()
         info = rag_status()
         logger.info(f"[Gateway] /rag_rebuild OK: {count} entities")
+        notify_persistent(
+            title="RAG Rebuild abgeschlossen",
+            message=f"{count} Entities indiziert\nZuletzt: {info.get('last_indexed', '?')}",
+            notification_id="rag_rebuild",
+        )
         return JSONResponse({
             "status": "ok",
             "entities": count,
@@ -237,6 +266,12 @@ def rag_rebuild_endpoint(
         })
     except Exception as e:
         logger.error(f"[Gateway] /rag_rebuild failed: {e}")
+        from core.ha import notify_persistent
+        notify_persistent(
+            title="RAG Rebuild fehlgeschlagen",
+            message=str(e),
+            notification_id="rag_rebuild",
+        )
         return JSONResponse(status_code=500, content={"status": "error", "error": str(e)})
 
 

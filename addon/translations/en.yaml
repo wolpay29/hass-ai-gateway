@@ -136,8 +136,9 @@ configuration:
     name: RAG (semantic entity retrieval)
     description: >-
       Replaces the static entities.yaml lookup with vector search over your HA
-      entities. Enable for large installations. Send /rag_rebuild in Telegram
-      after changing entities or this config.
+      entities. Enable for large installations. After changing entities or
+      this config: send /rag_rebuild in Telegram, or use the rebuild button
+      card described in the Documentation tab.
   rag.enabled:
     name: Enable RAG
   rag.top_k:

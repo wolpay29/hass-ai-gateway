@@ -119,6 +119,23 @@ def get_state(entity_id: str) -> dict | None:
         return None
 
 
+def notify_persistent(title: str, message: str, notification_id: str = "hass_ai_gateway") -> None:
+    """Create or replace a HA persistent notification (bell icon in the UI)."""
+    headers = {
+        "Authorization": f"Bearer {HA_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    url = f"{HA_URL}/api/services/persistent_notification/create"
+    try:
+        requests.post(url, headers=headers, json={
+            "title": title,
+            "message": message,
+            "notification_id": notification_id,
+        }, timeout=5)
+    except Exception as e:
+        logger.warning(f"[HA] persistent_notification fehlgeschlagen: {e}")
+
+
 def get_states_bulk(entity_ids: list[str], max_workers: int = 8) -> dict[str, dict]:
     """Holt States fuer mehrere Entity-IDs parallel. Fehlende/fehlgeschlagene IDs fehlen im Ergebnis.
 
