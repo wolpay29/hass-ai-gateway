@@ -226,6 +226,14 @@ query_rewriter: |-
     Anfrage: "und wieder aus"  (Verlauf: Nutzer: licht bei paul an)
     -> {{"intent":"command","query":"licht bei paul ausschalten"}}
 
+    Anfrage: "Dann schalte es bitte ein."
+    (Verlauf: Assistent: Das Licht im Zimmer Paul OG ist aus.)
+    -> {{"intent":"command","query":"licht bei paul einschalten"}}
+
+    Anfrage: "Kannst du es ausschalten?"
+    (Verlauf: Assistent: Das Zimmerlicht Paul OG ist gerade an.)
+    -> {{"intent":"command","query":"licht bei paul ausschalten"}}
+
     Anfrage: "das im Wohnzimmer"  (Verlauf: Assistent: Welches Licht meinst du?)
     -> {{"intent":"command","query":"licht im wohnzimmer einschalten"}}
 
