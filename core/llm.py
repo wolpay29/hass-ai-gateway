@@ -486,7 +486,11 @@ def smalltalk_reply(transcript: str, chat_id: int = 0) -> str | None:
 
 
 _RELEVANT_ATTRS_BY_DOMAIN: dict[str, tuple[str, ...]] = {
-    "climate": ("current_temperature", "temperature", "hvac_mode", "hvac_action", "preset_mode", "humidity", "current_humidity", "fan_mode"),
+    "climate": (
+        "current_temperature", "temperature", "hvac_mode", "hvac_modes",
+        "hvac_action", "preset_mode", "preset_modes",
+        "humidity", "current_humidity", "fan_mode",
+    ),
     "cover":   ("current_position", "current_tilt_position"),
     "light":   ("brightness", "color_temp", "color_mode", "rgb_color"),
     "fan":     ("percentage", "preset_mode"),
@@ -685,7 +689,7 @@ def parse_command_with_states(transcript: str, states: list[dict], chat_id: int 
     Gleiches JSON-Output-Format wie parse_command(). entity_list wird aus den
     uebergebenen Live-States gebaut; Validierung gegen deren entity_ids.
     Wenn ein Treffer gefunden wird, ist das Ergebnis im handlers.py genauso
-    ausfuehrbar wie das Ergebnis von parse_command().
+    ausfuehrbar wie das Ergebnis von parse_command()
     """
     if not states:
         logger.warning("[LLM Fallback REST] Keine Live-States uebergeben")
@@ -770,5 +774,3 @@ def parse_command_with_states(transcript: str, states: list[dict], chat_id: int 
     except Exception as e:
         logger.error(f"[LLM Fallback REST] Fehler: {e}")
         return None
-
-
