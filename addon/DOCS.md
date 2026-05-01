@@ -30,6 +30,76 @@ on first start and your edits persist across add-on updates.
 | `userconfig/post_llm_memory.md` | Free-text hints appended to all parser prompts (common errors, preferences, never-do rules) |
 | `menus.yaml` | Telegram bot menus, buttons, and action mappings |
 
+### `entities.yaml`
+
+Each entry exposes one HA entity to the gateway. The `keywords` list drives both
+the legacy keyword parser and the RAG index; `meta` adds an extra hint to the LLM
+prompt for tricky entities.
+
+```yaml
+entities:
+  - id: light.living_room
+    description: "Living room light"
+    keywords: ["living room", "lounge", "downstairs light"]
+    actions: ["turn_on", "turn_off", "toggle", "get_state"]
+    domain: light
+    meta: ""
+
+  - id: switch.garden_pump
+    description: "Garden irrigation pump"
+    keywords: ["garden pump", "irrigation", "sprinkler"]
+    actions: ["turn_on", "turn_off"]
+    domain: switch
+    meta: "Only switch on when weather is dry"
+
+  - id: sensor.outdoor_temperature
+    description: "Outdoor temperature"
+    keywords: ["outside temperature", "how warm outside"]
+    actions: ["get_state"]
+    domain: sensor
+    meta: ""
+```
+
+### `entities_blacklist.yaml`
+
+Patterns matched here are dropped from the RAG index and can never be selected
+by the LLM. Accepts exact `entity_id` strings or Unix-style globs (`*`, `?`).
+
+```yaml
+blacklist:
+  - sensor.zigbee2mqtt_bridge_state   # exact match
+  - sensor.*_battery_level            # glob — all battery sensors
+  - automation.test_*                 # glob — all test automations
+```
+
+### `pre_llm_memory.md` / `post_llm_memory.md`
+
+Free-text Markdown appended to the LLM prompt. Write hints **outside** the
+HTML comment block — everything inside `<!-- ... -->` is ignored by the gateway.
+
+**`pre_llm_memory.md`** is injected before the RAG search (query-rewriter stage).
+Use it for STT typo fixes and pronoun rules.
+
+```markdown
+## Common STT errors
+- "livving room", "livingroom" -> living room
+- "pump" without context -> garden pump
+
+## Ambiguous terms
+- "upstairs" alone is ambiguous — leave as-is, ask for clarification
+```
+
+**`post_llm_memory.md`** is appended to every parser prompt (legacy, RAG, fallback).
+Use it for action preferences and never-do rules.
+
+```markdown
+## Preferences
+- If user says "all off", use group entities where available
+
+## Never do
+- Never trigger automation.vacation_mode — always ask first
+```
+
 After editing: restart the add-on. After editing `entities.yaml` while RAG is
 enabled, also send `/rag_rebuild` in the Telegram chat.
 
