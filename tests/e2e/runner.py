@@ -229,8 +229,11 @@ class GatewaySubprocess:
 # Case execution
 # ---------------------------------------------------------------------------
 
+_AUDIO_MIME = {".wav": "audio/wav", ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".m4a": "audio/mp4"}
+
 def _post_audio(port: int, audio_path: Path, device_id: str, tts: bool, api_key: str) -> requests.Response:
-    files = {"file": (audio_path.name, audio_path.read_bytes(), "audio/wav")}
+    mime = _AUDIO_MIME.get(audio_path.suffix.lower(), "audio/wav")
+    files = {"file": (audio_path.name, audio_path.read_bytes(), mime)}
     data = {"device_id": device_id, "tts": "true" if tts else "false"}
     headers = {"X-Api-Key": api_key} if api_key else {}
     return requests.post(
