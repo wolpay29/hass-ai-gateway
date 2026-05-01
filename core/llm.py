@@ -602,10 +602,7 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0, r
         f"Modell: {LMSTUDIO_MODEL} | History: {len(history) // 2}"
     )
 
-    user_content = (
-        f"[Vorverarbeitung: {rewriter_query}]\n{transcript}"
-        if rewriter_query and rewriter_query != transcript else transcript
-    )
+    user_content = rewriter_query if rewriter_query else transcript
 
     try:
         endpoint = f"{LMSTUDIO_URL}/v1/chat/completions"
