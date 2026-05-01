@@ -45,6 +45,39 @@ REPO_ROOT = THIS_DIR.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
+def _resolve_gateway_python(local_env: dict | None = None) -> str:
+    """Find the Python that has uvicorn available.
+
+    Priority:
+      1. GATEWAY_PYTHON in .env.local
+      2. Same interpreter as the runner (sys.executable) if uvicorn importable
+      3. uvicorn binary on PATH -> derive sibling python
+      4. Fallback to sys.executable with a warning
+    """
+    if local_env and local_env.get("GATEWAY_PYTHON"):
+        return local_env["GATEWAY_PYTHON"]
+
+    import importlib.util
+    if importlib.util.find_spec("uvicorn") is not None:
+        return sys.executable
+
+    uvicorn_bin = shutil.which("uvicorn")
+    if uvicorn_bin:
+        candidate = Path(uvicorn_bin).parent / "python"
+        if candidate.is_file():
+            return str(candidate)
+        candidate3 = Path(uvicorn_bin).parent / "python3"
+        if candidate3.is_file():
+            return str(candidate3)
+
+    print(
+        "WARNING: uvicorn not found in current Python or PATH. "
+        "Set GATEWAY_PYTHON=/path/to/python in tests/e2e/.env.local",
+        file=sys.stderr,
+    )
+    return sys.executable
+
+
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
@@ -115,10 +148,11 @@ def _wait_health(port: int, timeout: float = 30.0) -> bool:
 class GatewaySubprocess:
     """Runs services/voice_gateway/main.py with an isolated env + log capture."""
 
-    def __init__(self, env_file: Path, log_path: Path, port: int):
+    def __init__(self, env_file: Path, log_path: Path, port: int, python_exe: str | None = None):
         self.env_file = env_file
         self.log_path = log_path
         self.port = port
+        self.python_exe = python_exe or sys.executable
         self.proc: subprocess.Popen | None = None
         self.log_buf: deque[tuple[float, str]] = deque(maxlen=20000)
         self._reader: threading.Thread | None = None
@@ -136,7 +170,7 @@ class GatewaySubprocess:
         env["GATEWAY_PORT"] = str(self.port)
 
         cmd = [
-            sys.executable, "-m", "uvicorn",
+            self.python_exe, "-m", "uvicorn",
             "services.voice_gateway.main:app",
             "--host", "127.0.0.1",
             "--port", str(self.port),
@@ -330,6 +364,9 @@ def main() -> int:
         print("ERROR: tests/e2e/.env.local missing. Copy .env.local.example and fill in values.", file=sys.stderr)
         return 2
 
+    gateway_python = _resolve_gateway_python(local_env)
+    print(f"Gateway Python: {gateway_python}")
+
     runs_all = matrix.get("runs", [])
     if args.only:
         runs = [r for r in runs_all if fnmatch.fnmatchcase(r["name"], args.only)]
@@ -372,7 +409,7 @@ def main() -> int:
             rag_count = _rebuild_rag(env)
             print(f"[{run_name}] RAG built: {rag_count} entities")
 
-        gateway = GatewaySubprocess(env_file, run_dir / "log.txt", port)
+        gateway = GatewaySubprocess(env_file, run_dir / "log.txt", port, python_exe=gateway_python)
         print(f"[{run_name}] starting subprocess on port {port} ...")
         gateway.start()
         try:
