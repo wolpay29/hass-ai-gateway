@@ -24,6 +24,10 @@ def _extract_json(text: str) -> dict | None:
     Versucht zuerst normales Matching. Falls die schließende } fehlt (Modell-Bug,
     finish_reason=stop aber unvollständiges JSON), werden fehlende } aufgefüllt.
     """
+    # Fix 2: Markdown-Code-Fences entfernen (```json ... ``` oder ``` ... ```)
+    text = re.sub(r'```(?:json)?\s*', '', text)
+    text = re.sub(r'```', '', text).strip()
+
     # Normalfall: vollständiges {…}
     match = re.search(r'\{.*\}', text, re.DOTALL)
     if match:
@@ -616,8 +620,14 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
 
         result = _extract_json(content)
         if result is None:
-            logger.error("[LLM RAG] Kein JSON gefunden")
-            return None
+            # Fix 1: plain text als reply wrappen statt None zurueckgeben
+            stripped = content.strip()
+            if stripped:
+                logger.warning(f"[LLM RAG] Kein JSON — verwende plain text als reply: '{stripped}'")
+                result = {"reply": stripped, "actions": [], "clarification_question": ""}
+            else:
+                logger.error("[LLM RAG] Kein JSON und leere Antwort")
+                return None
 
         logger.info(f"[LLM RAG] Parsed: {result}")
 

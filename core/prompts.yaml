@@ -154,6 +154,10 @@ rag_parser: |-
     nicht Perfekt ("Das Licht ist jetzt an") — die Ausfuehrung passiert
     noch waehrend die Antwort gelesen wird.
 
+  PFLICHT-FORMAT: Antworte IMMER als JSON-Objekt, auch bei einfachen Status-
+  antworten, Rueckfragen oder wenn keine Aktion noetig ist. Niemals Fliesstext
+  ohne JSON-Wrapper ausgeben! Korrekt: {{"reply":"...","actions":[]}}
+
 # 3) REST-Fallback: komplette Live-Entity-Liste aus HA
 fallback_rest: |-
   Smart Home Assistent. Antworte NUR mit JSON, kein anderer Text.
