@@ -37,6 +37,15 @@
 
 single_cases:
 
+  # --------------------------- Smoke-Test (Text, kein Audio noetig) --------------------------
+  - id: smoke_pv_text
+    description: "Smoke-Test: PV-Status per Text - kein Audio noetig, prueft ob Pipeline grundsaetzlich laeuft"
+    text: "Wie viel Leistung liefert die Photovoltaik gerade?"
+    tts: false
+    expect:
+      no_actions: true
+      reply_regex: '\d'
+
   # --------------------------- Statusabfragen --------------------------
   - id: status_pv
     description: "PV-Leistung abfragen - Sensor in yaml, Wert kommt aus pre-fetched state"
