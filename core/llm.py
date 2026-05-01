@@ -619,6 +619,8 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
             logger.error("[LLM RAG] Kein JSON gefunden")
             return None
 
+        logger.info(f"[LLM RAG] Parsed: {result}")
+
         clarification_q = (result.get("clarification_question") or "").strip()
         if clarification_q:
             logger.info(f"[LLM RAG] Clarification vom Parser: '{clarification_q}'")
