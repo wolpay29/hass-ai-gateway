@@ -645,6 +645,9 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0, r
                 validated.append(act)
                 logger.info(f"[LLM RAG] needs_fallback fuer '{eid or '?'}'")
                 continue
+            if act.get("action") == "get_state":
+                logger.warning(f"[LLM RAG] get_state ist kein HA-Service — Action ignoriert (State ist bereits im Entity-Kontext)")
+                continue
             if not eid:
                 continue
             if eid not in valid_ids:

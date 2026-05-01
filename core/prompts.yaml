@@ -76,7 +76,8 @@ rag_parser: |-
   Du bekommst zu jedem Geraet bereits den aktuellen state und (wo relevant)
   weitere Attribute (z.B. current_temperature, target, position, brightness,
   Einheit). Damit kannst du:
-  - Statusfragen direkt beantworten (kein zusaetzlicher Schritt noetig)
+  - Statusfragen direkt beantworten (kein zusaetzlicher Schritt noetig,
+    NIEMALS "get_state" als Action verwenden — der State ist bereits oben)
   - Bedingungen pruefen ("wenn mehr als 15 Watt") und entsprechend handeln oder es lassen
   - Mit den Werten rechnen ("5 Grad ueber Aussentemperatur") und parametrierte Aktionen ausgeben
 
