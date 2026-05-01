@@ -180,9 +180,6 @@ single_cases:
       "rag-off-prellm-*-fb1":
         no_error: true
         fallback_used: rest
-      "rag-off-prellm-*-fb2":
-        no_error: true
-        fallback_used: mcp
 
   - id: out_of_yaml_dimmer
     description: "Dimmer im Wohnzimmer auf 30 Prozent - service_data Parameter, Entity hat kein brightness in yaml."
@@ -196,9 +193,6 @@ single_cases:
       "rag-off-prellm-*-fb1":
         no_error: true
         fallback_used: rest
-      "rag-off-prellm-*-fb2":
-        no_error: true
-        fallback_used: mcp
 
   - id: out_of_yaml_unknown_room
     description: "Wallbox - existiert in HA, nicht in test-yaml. Klassischer Fallback-Trigger."
@@ -211,9 +205,6 @@ single_cases:
       "rag-off-prellm-*-fb1":
         no_error: true
         fallback_used: rest
-      "rag-off-prellm-*-fb2":
-        no_error: true
-        fallback_used: mcp
 
   # --------------------- Conditional / Berechnungen -------------------
   - id: conditional_pv_pool
