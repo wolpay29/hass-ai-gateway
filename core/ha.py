@@ -1,13 +1,23 @@
 import requests
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from core.config import HA_URL, HA_TOKEN, HA_SERVICE_TIMEOUT
+from core.config import HA_URL, HA_TOKEN, HA_SERVICE_TIMEOUT, HA_DRY_RUN
 
 logger = logging.getLogger(__name__)
 
 
 def call_service(domain: str, action: str, entity_id: str, service_data: dict | None = None) -> str:
-    """HA Service aufrufen. Gibt 'ok', 'timeout' oder 'error' zurueck."""
+    """HA Service aufrufen. Gibt 'ok', 'timeout' oder 'error' zurueck.
+
+    HA_DRY_RUN=true: kein echter HTTP-Call - der Service-Call wird nur geloggt
+    und mit 'ok' quittiert. State-Reads (get_state, get_states_bulk, get_all_states)
+    sind davon nicht betroffen und liefern weiterhin echte Werte.
+    """
+    if HA_DRY_RUN:
+        sd = f" {service_data}" if service_data else ""
+        logger.info(f"[HA DRY-RUN] {domain}.{action} {entity_id}{sd}")
+        return "ok"
+
     headers = {
         "Authorization": f"Bearer {HA_TOKEN}",
         "Content-Type": "application/json"

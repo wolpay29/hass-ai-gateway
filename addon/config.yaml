@@ -37,6 +37,7 @@ options:
     url: "http://supervisor/core"
     token: ""
     service_timeout: 15
+    dry_run: false
   whisper:
     external_url: ""
     external_model: "deepdml/faster-whisper-large-v3-turbo-ct2"
@@ -98,6 +99,7 @@ schema:
     url: str
     token: password?
     service_timeout: int(1,300)
+    dry_run: bool
   whisper:
     external_url: str?
     external_model: str?

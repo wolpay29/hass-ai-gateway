@@ -72,6 +72,11 @@ LMSTUDIO_API_KEY = os.getenv("LMSTUDIO_API_KEY", "")
 
 HA_SERVICE_TIMEOUT = int(os.getenv("HA_SERVICE_TIMEOUT", "15"))
 
+# Wenn true: call_service() loggt nur und schickt keine echten HA-Aufrufe.
+# State-Reads bleiben aktiv, damit Statusabfragen weiter mit Live-Daten arbeiten.
+# Praktisch fuer manuelle Experimente und die End-to-End-Test-Pipeline.
+HA_DRY_RUN = os.getenv("HA_DRY_RUN", "false").lower() == "true"
+
 LMSTUDIO_TEMPERATURE = float(os.getenv("LMSTUDIO_TEMPERATURE", "0.1"))
 
 LMSTUDIO_NO_THINK = os.getenv("LMSTUDIO_NO_THINK", "true").lower() == "true"

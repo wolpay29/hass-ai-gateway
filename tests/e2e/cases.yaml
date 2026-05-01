@@ -1,0 +1,281 @@
+# Test-Cases fuer die End-to-End-Pipeline.
+#
+# Struktur:
+#   single_cases:    eine Eingabe (Audio oder Text), eine Auswertung
+#   sequence_cases:  mehrere Schritte hintereinander mit gemeinsamer chat_id
+#                    (testet History, Pronomen-Aufloesung, Clarification-Round-Trip)
+#
+# Pro Case Felder:
+#   id           - eindeutiger Slug (Dateinamen-tauglich)
+#   description  - Was wird getestet?
+#   audio        - Dateiname unter fixtures/audio/  (sich gegenseitig ausschliessend mit text)
+#   text         - direkter Text-Input fuer /text-Endpoint
+#   tts          - true => Audio-Reply als WAV; false => nur JSON. Default true bei audio.
+#   expect       - Asserts die ueberall greifen
+#   expect_per_run - feinkoernige Asserts pro Run-Pattern (fnmatch)
+#   skip_runs    - Run-Patterns die uebersprungen werden sollen (z.B. wenn MCP-Server fehlt)
+#
+# expect-Schluessel (alle optional, kombinierbar):
+#   reply_regex          - Regex (DOTALL+IGNORECASE) muss in result.reply matchen
+#   reply_min_chars      - Mindestlaenge des replies
+#   actions_executed     - Exakte Liste {action, entity_id} (Reihenfolge egal)
+#   actions_count_min    - Mindestanzahl Actions
+#   actions_count_max    - Maximal-Anzahl Actions
+#   action_includes      - {action, entity_id} muss in actions_executed enthalten sein
+#                          (mehrfaches Listing erlaubt)
+#   no_actions           - true => result.actions_executed == []
+#   error                - Erwartetes error-Feld (z.B. "needs_fallback_no_mode")
+#   no_error             - true => result.error muss None sein
+#   fallback_used        - "rest" / "mcp" / null (string match)
+#   transcript_contains  - Whisper-Transkript enthaelt den Substring (case-insensitive)
+#
+# Editier-Hinweise:
+#   - Neuer Case: einfach unten anhaengen.
+#   - Audio-Datei muss in fixtures/audio/ liegen. Siehe AUDIO_RECORDING_LIST.md
+#     fuer die Liste der noch zu sprechenden Aufnahmen.
+#   - Du kannst pure Text-Cases verwenden indem du `text:` statt `audio:` setzt.
+
+single_cases:
+
+  # --------------------------- Statusabfragen --------------------------
+  - id: status_pv
+    description: "PV-Leistung abfragen - Sensor in yaml, Wert kommt aus pre-fetched state"
+    audio: status_pv.wav
+    expect:
+      no_actions: true
+      reply_regex: '\d'
+      transcript_contains: pv
+
+  - id: status_aussentemp
+    description: "Aussentemperatur abfragen - Sensor in yaml"
+    audio: status_aussentemp.wav
+    expect:
+      no_actions: true
+      reply_regex: '(grad|°|celsius)'
+      transcript_contains: drauss
+
+  - id: status_battery_soc
+    description: "Batterie-Ladezustand"
+    audio: status_battery.wav
+    expect:
+      no_actions: true
+      reply_regex: '(\d|prozent|soc)'
+      transcript_contains: batterie
+
+  - id: status_pool_climate
+    description: "Pool-Waermepumpe Status"
+    audio: status_pool_climate.wav
+    expect:
+      no_actions: true
+      transcript_contains: pool
+
+  - id: status_binary_door
+    description: "Abstellkammer-Tuer (binary_sensor) - offen/zu Status"
+    audio: status_abstellkammer.wav
+    expect:
+      no_actions: true
+      reply_regex: '(offen|zu|geschlossen|aktiv|inaktiv)'
+
+  # --------------------------- Direkte Aktionen -----------------------
+  - id: action_licht_paul_an
+    description: "Licht bei Paul einschalten - simpel"
+    audio: action_licht_paul_an.wav
+    expect:
+      action_includes: [{ entity_id: light.licht_paul, action: turn_on }]
+      no_error: true
+
+  - id: action_licht_max_aus
+    description: "Licht bei Max ausschalten"
+    audio: action_licht_max_aus.wav
+    expect:
+      action_includes: [{ entity_id: light.licht_max, action: turn_off }]
+
+  - id: action_tor_auto
+    description: "Garagentor oeffnen - Automation triggern"
+    audio: action_tor_auto.wav
+    expect:
+      action_includes: [{ entity_id: automation.trigger_tor_auto, action: trigger }]
+
+  - id: action_pool_pump_on
+    description: "Pool-Pumpe einschalten - Automation triggern"
+    audio: action_pool_pump_on.wav
+    expect:
+      action_includes: [{ entity_id: automation.trigger_pool_pump_on, action: trigger }]
+
+  - id: action_rollo_paul_zu
+    description: "Rollo bei Paul runter (switch.rollo_paul_ab)"
+    audio: action_rollo_paul_zu.wav
+    expect:
+      action_includes: [{ entity_id: switch.rollo_paul_ab, action: turn_on }]
+
+  # ------------------------ Multi-Action Befehle ----------------------
+  - id: action_paul_und_max_an
+    description: "Mehrere Lichter explizit genannt - sollen alle geschaltet werden"
+    audio: action_paul_und_max_an.wav
+    expect:
+      actions_count_min: 2
+      action_includes:
+        - { entity_id: light.licht_paul, action: turn_on }
+        - { entity_id: light.licht_max, action: turn_on }
+
+  - id: action_alle_lichter_og_aus
+    description: "Allquantor + Bereich - bevorzugt die Gruppen-Entity"
+    audio: action_alle_lichter_og_aus.wav
+    expect:
+      action_includes: [{ entity_id: light.licht_og_aus, action: turn_off }]
+      actions_count_max: 1   # genau die Gruppen-Entity, nicht ausgefaechert
+
+  # ----------------------- Mehrdeutigkeiten / Plural ------------------
+  - id: ambiguous_licht
+    description: "'Mach das Licht an' ohne Raum -> Rueckfrage erwartet"
+    audio: ambiguous_licht.wav
+    expect:
+      no_actions: true
+      reply_regex: '(welch|wo|raum|zimmer)'
+    # Bei "rag-off-prellm-off" antwortet das Modell evtl. ohne clarification - dann
+    # darf der Reply auch leer sein. Wir lockern dort zu einem reinen no_actions-Check.
+    expect_per_run:
+      "rag-off-prellm-off-*":
+        no_actions: true
+
+  - id: plural_lichter_aus
+    description: "Plural ohne Allquantor - keine Schalt-Aktion, idealerweise Rueckfrage"
+    audio: plural_lichter_aus.wav
+    expect:
+      no_actions: true
+
+  # ----------------------- Smalltalk / Begruessung --------------------
+  - id: smalltalk_hallo
+    description: "Smalltalk - Rewriter sollte intent=smalltalk erkennen"
+    audio: smalltalk_hallo.wav
+    expect:
+      no_actions: true
+      reply_min_chars: 2
+    expect_per_run:
+      # Ohne Rewriter wird das vom Parser als 'kein Treffer' behandelt -> Reply darf leer sein.
+      "*-prellm-off-*":
+        no_actions: true
+
+  # ------------------ Entities NICHT in entities.yaml -----------------
+  # Hier ist der Punkt: bei RAG-on findet RAG die Entities aus dem HA-Index,
+  # bei RAG-off geht's nur ueber Fallback. So testen wir Mode 1/2 sauber.
+  - id: out_of_yaml_humidity
+    description: "Luftfeuchtigkeit im Bad - nicht in test-entities.yaml. Fallback noetig wenn RAG aus."
+    audio: out_of_yaml_humidity.wav
+    expect_per_run:
+      "rag-on-*":
+        no_actions: true                   # Statusantwort aus RAG-Live-States
+        reply_min_chars: 3
+      "rag-off-prellm-*-fb0":
+        error: needs_fallback_no_mode
+      "rag-off-prellm-*-fb1":
+        no_error: true
+        fallback_used: rest
+      "rag-off-prellm-*-fb2":
+        no_error: true
+        fallback_used: mcp
+
+  - id: out_of_yaml_dimmer
+    description: "Dimmer im Wohnzimmer auf 30 Prozent - service_data Parameter, Entity hat kein brightness in yaml."
+    audio: out_of_yaml_dimmer.wav
+    expect_per_run:
+      "rag-on-*":
+        no_error: true
+        actions_count_min: 1
+      "rag-off-prellm-*-fb0":
+        error: needs_fallback_no_mode
+      "rag-off-prellm-*-fb1":
+        no_error: true
+        fallback_used: rest
+      "rag-off-prellm-*-fb2":
+        no_error: true
+        fallback_used: mcp
+
+  - id: out_of_yaml_unknown_room
+    description: "Wallbox - existiert in HA, nicht in test-yaml. Klassischer Fallback-Trigger."
+    audio: out_of_yaml_wallbox.wav
+    expect_per_run:
+      "rag-on-*":
+        no_error: true
+      "rag-off-prellm-*-fb0":
+        error: needs_fallback_no_mode
+      "rag-off-prellm-*-fb1":
+        no_error: true
+        fallback_used: rest
+      "rag-off-prellm-*-fb2":
+        no_error: true
+        fallback_used: mcp
+
+  # --------------------- Conditional / Berechnungen -------------------
+  - id: conditional_pv_pool
+    description: "Wenn PV ueber 1000 W erzeugt, Pool-Pumpe einschalten."
+    audio: conditional_pv_pool.wav
+    expect:
+      # Modell entscheidet auf Basis des Live-Werts. Wir akzeptieren beide
+      # Pfade (action ausgefuehrt oder bewusst nicht) und verlangen nur, dass
+      # der Reply die Bedingung referenziert.
+      reply_min_chars: 5
+
+  # --------------------- Negative / Stop-Befehle ----------------------
+  - id: stop_command
+    description: "User sagt 'Stop' / 'Vergiss es' - keine Action, Smalltalk-Reply"
+    audio: stop_command.wav
+    expect:
+      no_actions: true
+
+
+sequence_cases:
+
+  - id: pronoun_followup
+    description: "Pronomen ueber History aufloesen: Licht ein -> 'und wieder aus'"
+    chat_id_base: 999001
+    steps:
+      - audio: action_licht_paul_an.wav
+        expect:
+          action_includes: [{ entity_id: light.licht_paul, action: turn_on }]
+      - audio: seq_und_wieder_aus.wav
+        expect:
+          action_includes: [{ entity_id: light.licht_paul, action: turn_off }]
+        # Ohne Rewriter bricht das oft - Pronomen wird nicht aufgeloest.
+        expect_per_run:
+          "*-prellm-off-*":
+            no_error: true   # toleranter, Modell muss History allein nutzen
+
+  - id: clarification_round
+    description: "Mehrdeutig -> Rueckfrage -> Antwort 'Paul' -> Schalten"
+    chat_id_base: 999002
+    steps:
+      - audio: ambiguous_licht.wav
+        expect:
+          no_actions: true
+      - audio: seq_paul.wav
+        expect:
+          action_includes: [{ entity_id: light.licht_paul, action: turn_on }]
+        expect_per_run:
+          "rag-off-prellm-off-*":
+            actions_count_min: 0   # ohne Rewriter+RAG fragiles Folge-Setup
+
+  - id: status_then_conditional
+    description: "Statusabfrage -> Folgebefehl der den Wert nutzt"
+    chat_id_base: 999003
+    steps:
+      - audio: status_aussentemp.wav
+        expect:
+          no_actions: true
+      - audio: seq_pool_warm_wenn_kalt.wav
+        expect:
+          reply_min_chars: 3   # Modell entscheidet, Reply soll begruendet sein
+
+  - id: multi_turn_room_switch
+    description: "Mehrere unabhaengige Befehle in einer Konversation"
+    chat_id_base: 999004
+    steps:
+      - audio: action_licht_paul_an.wav
+        expect:
+          action_includes: [{ entity_id: light.licht_paul, action: turn_on }]
+      - audio: action_licht_max_aus.wav
+        expect:
+          action_includes: [{ entity_id: light.licht_max, action: turn_off }]
+      - audio: action_tor_auto.wav
+        expect:
+          action_includes: [{ entity_id: automation.trigger_tor_auto, action: trigger }]

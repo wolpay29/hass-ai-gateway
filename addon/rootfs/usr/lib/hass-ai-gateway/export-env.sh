@@ -12,6 +12,7 @@ if [ -z "${HA_TOKEN}" ] || [ "${HA_TOKEN}" = "null" ]; then
     export HA_TOKEN="${SUPERVISOR_TOKEN:-}"
 fi
 export HA_SERVICE_TIMEOUT="$(bashio::config 'home_assistant.service_timeout')"
+export HA_DRY_RUN="$(bashio::config 'home_assistant.dry_run')"
 
 # --- Whisper (external only for v1.0) ---
 export WHISPER_BACKEND=external

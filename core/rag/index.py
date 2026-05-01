@@ -59,7 +59,9 @@ def _load_yaml_curated() -> dict:
     """Return {entity_id: entity_dict} from entities.yaml."""
     path = USERCONFIG_DIR / "entities.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return {e["id"]: e for e in (data or {}).get("entities", [])}
+    #return {e["id"]: e for e in (data or {}).get("entities", [])}
+    return {e["id"]: e for e in (data or {}).get("entities") or []}
+    #                                                         ^^^^^ statt , []
 
 
 def _load_blacklist() -> list[str]:

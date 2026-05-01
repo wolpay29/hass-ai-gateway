@@ -3,6 +3,7 @@
 *.env
 .env.*
 !.env.example
+!.env.local.example
 
 # Python
 __pycache__/
@@ -48,4 +49,9 @@ coverage-report/
 # HA Add-on local build staging
 addon/_build/
 addon/_data/
+
+# End-to-end test pipeline (local-only artifacts)
+tests/e2e/.env.local
+tests/e2e/_runs/
+tests/e2e/reports/
 

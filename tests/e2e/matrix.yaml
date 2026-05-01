@@ -1,0 +1,115 @@
+# Settings-Matrix fuer die End-to-End-Test-Pipeline.
+#
+# Jeder Eintrag unter `runs:` ist eine Settings-Variante. Pro Variante wird
+# die Voice-Gateway als Subprocess auf einem isolierten Port hochgezogen,
+# mit den hier definierten Env-Vars (gemerged ueber .env.local + common_env).
+# Beim Wechsel zur naechsten Variante: Subprocess kill -> neue env -> neu start.
+#
+# Editier-Hinweise:
+#   - Neue Run-Variante: einfach unten an `runs:` anhaengen.
+#   - Globale Vorgaben fuer alle Runs gehoeren in `common_env:`.
+#   - Variablennamen muessen mit dem Env-Var-Namen aus core/config.py uebereinstimmen.
+#   - Pro Run: alles aus .env.local laden -> common_env mergen -> run.env mergen.
+#     Spaetere Eintraege ueberschreiben fruehere.
+#   - Platzhalter {run} im Pfad wird vom Runner durch den Run-Namen ersetzt.
+
+# Defaults fuer alle Runs (kann pro Run ueberschrieben werden).
+common_env:
+  # Voice-Gateway laeuft auf einem Test-Port, damit das Production-Addon
+  # ungestoert auf 8765 weiterlaufen kann.
+  GATEWAY_PORT: "8799"
+  GATEWAY_API_KEY: ""
+  GATEWAY_TELEGRAM_PUSH: "false"
+
+  # History-Setup damit "und wieder aus" / Clarification-Sequenzen funktionieren.
+  LLM_HISTORY_SIZE: "5"
+  HISTORY_INCLUDE_ASSISTANT: "true"
+  HISTORY_APPEND_EXECUTIONS: "true"
+
+  # Sicherheit beim Test - keine echten Service-Calls. State-Reads bleiben aktiv.
+  HA_DRY_RUN: "true"
+
+  # Test-spezifische userconfig - eigene entities.yaml, eigenes whisper-Vocab.
+  USERCONFIG_DIR: "{repo_root}/tests/e2e/fixtures"
+
+  # Isolierte Daten pro Run (RAG-DB, Voice-Downloads).
+  RAG_DB_PATH: "{repo_root}/tests/e2e/_runs/{run}/rag.sqlite"
+  VOICE_DOWNLOAD_DIR: "{repo_root}/tests/e2e/_runs/{run}/voice"
+
+  # Action-Limit gross genug fuer Bulk-Tests, aber begrenzt.
+  MAX_ACTIONS_PER_COMMAND: "10"
+
+  # Standard-Threshold aus = nur top_k. Per Run ueberschreibbar (siehe "strict").
+  RAG_DISTANCE_THRESHOLD: "0.0"
+
+  # Fallback-REST-Filter wie Production-Default.
+  FALLBACK_REST_DOMAINS: "light,switch,sensor,binary_sensor,climate,automation,cover"
+  FALLBACK_REST_MAX_ENTITIES: "0"
+
+# Run-Varianten. Jede deckt einen anderen Code-Pfad ab.
+runs:
+  # ------------------------------- RAG aktiv -------------------------------
+  - name: "rag-on-prellm-on-fb0"
+    description: "Standard: RAG + Rewriter aktiv, kein Fallback"
+    env:
+      RAG_ENABLED: "true"
+      LLM_PREPROCESSOR: "true"
+      FALLBACK_MODE: "0"
+
+  - name: "rag-on-prellm-on-fb1"
+    description: "RAG + Rewriter, REST-Fallback fuer Entities ausserhalb der yaml"
+    env:
+      RAG_ENABLED: "true"
+      LLM_PREPROCESSOR: "true"
+      FALLBACK_MODE: "1"
+
+  - name: "rag-on-prellm-on-fb2"
+    description: "RAG + Rewriter, MCP-Fallback (LM Studio + HA-MCP-Server)"
+    env:
+      RAG_ENABLED: "true"
+      LLM_PREPROCESSOR: "true"
+      FALLBACK_MODE: "2"
+
+  - name: "rag-on-prellm-off-fb0"
+    description: "RAG aktiv aber ohne Rewriter (Pronomen/Tippos schwerer)"
+    env:
+      RAG_ENABLED: "true"
+      LLM_PREPROCESSOR: "false"
+      FALLBACK_MODE: "0"
+
+  - name: "rag-on-prellm-on-fb0-strict"
+    description: "RAG + Rewriter mit strengem Distance-Threshold (weniger Long-Tail-Halluzinationen)"
+    env:
+      RAG_ENABLED: "true"
+      LLM_PREPROCESSOR: "true"
+      FALLBACK_MODE: "0"
+      RAG_DISTANCE_THRESHOLD: "0.4"
+
+  # ------------------------------- RAG aus -------------------------------
+  - name: "rag-off-prellm-on-fb0"
+    description: "Nur entities.yaml + Rewriter, kein Fallback"
+    env:
+      RAG_ENABLED: "false"
+      LLM_PREPROCESSOR: "true"
+      FALLBACK_MODE: "0"
+
+  - name: "rag-off-prellm-on-fb1"
+    description: "Nur entities.yaml + Rewriter, REST-Fallback fuer fehlende Entities"
+    env:
+      RAG_ENABLED: "false"
+      LLM_PREPROCESSOR: "true"
+      FALLBACK_MODE: "1"
+
+  - name: "rag-off-prellm-on-fb2"
+    description: "Nur entities.yaml + Rewriter, MCP-Fallback fuer fehlende Entities"
+    env:
+      RAG_ENABLED: "false"
+      LLM_PREPROCESSOR: "true"
+      FALLBACK_MODE: "2"
+
+  - name: "rag-off-prellm-off-fb0"
+    description: "Minimal-Setup ohne alles - testet nur den Primary-Parser"
+    env:
+      RAG_ENABLED: "false"
+      LLM_PREPROCESSOR: "false"
+      FALLBACK_MODE: "0"

@@ -174,7 +174,14 @@ home_assistant:
   url: "http://supervisor/core"   # default — uses the Supervisor proxy
   token: ""                       # blank = use the auto-injected SUPERVISOR_TOKEN
   service_timeout: 15
+  dry_run: false                  # true = no real service calls, just log; state reads stay live
 ```
+
+`dry_run` is useful for two things: a safety net while you tinker with the
+LLM prompts (so a misfire doesn't unlock the front door), and the local
+end-to-end test pipeline under `tests/e2e/`. It only blocks `call_service`
+calls — `get_state` and bulk state reads still see real data, so status
+queries continue to work.
 
 Leaving `token` blank makes the add-on use `SUPERVISOR_TOKEN`, which already
 has the permissions the gateway needs. Override it with a long-lived

@@ -1,0 +1,409 @@
+entities:
+- id: light.licht_paul
+  description: Licht Zimmer Paul OG
+  keywords: [paul, pauls zimmer, zimmer paul]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_max
+  description: Licht Zimmer Max OG
+  keywords: [max, max zimmer, zimmer max]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_lisa
+  description: Licht Zimmer Lisa OG
+  keywords: [lisa, lisas zimmer, zimmer lisa]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_eltern
+  description: Licht Elternschlafzimmer OG
+  keywords: [eltern, schlafzimmer, elternzimmer]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_bad
+  description: Licht Bad Obergeschoss
+  keywords: [bad, bad oben, badezimmer oben]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_buro
+  description: Licht Buero
+  keywords: [buero, buro, arbeitszimmer, office]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_kuche_1
+  description: Kuechenbeleuchtung Gruppe 1
+  keywords: [kueche, kuche, kuechenlicht, kueche 1]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_kuche_2
+  description: Kuechenbeleuchtung Gruppe 2
+  keywords: [kueche 2, kuche 2, kuechenlicht 2]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_essen_1
+  description: Licht Essbereich Gruppe 1
+  keywords: [essen, essbereich, esszimmer, essen 1]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_essen_2
+  description: Licht Essbereich Gruppe 2
+  keywords: [essen 2, essbereich 2, esszimmer 2]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_wohnzimmer_1
+  description: Wohnzimmerlicht Gruppe 1
+  keywords: [wohnzimmer, wohnzimmerlicht, wohnzimmer 1]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_wohnzimmer_2
+  description: Wohnzimmerlicht Gruppe 2
+  keywords: [wohnzimmer 2, wohnzimmerlicht 2]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_wc_eg
+  description: Licht WC Erdgeschoss
+  keywords: [wc, toilette, klo]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_gang_eg
+  description: Licht Gang Erdgeschoss
+  keywords: [gang, flur, gang eg]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_abstellraum_eg
+  description: Licht Abstellraum Erdgeschoss
+  keywords: [abstellraum, abstellraum eg, lager eg]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_vorzimmer_eg
+  description: Licht Vorzimmer Eingang Erdgeschoss
+  keywords: [vorzimmer, eingang, vorraum]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_treppe_og
+  description: Licht Treppe Obergeschoss
+  keywords: [treppe og, stiege oben, treppe oben]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_partyraum
+  description: Licht Partyraum Keller
+  keywords: [partyraum, party, keller party]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_abstellraum_ug
+  description: Licht Abstellraum Keller
+  keywords: [abstellraum ug, abstellraum keller, lager keller]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_werkstatt
+  description: Licht Werkstatt Keller
+  keywords: [werkstatt, werkraum]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_technikraum
+  description: Licht Technikraum Heizraum Keller
+  keywords: [technikraum, technik, heizraum, heizung]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_stiege_ug
+  description: Licht Stiege Keller
+  keywords: [stiege ug, treppe keller, stiege keller]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_bad_ug
+  description: Licht Bad Keller
+  keywords: [bad ug, bad keller, badezimmer keller]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_kg_aus
+  description: Alle Lichter Kellergeschoss ausschalten
+  keywords: [kg aus, keller alles aus, keller licht aus]
+  actions: [turn_off]
+  domain: light
+  meta: Schaltet alle lichter im Keller aus, kann nur ausschalten, nicht einschalten
+- id: light.licht_eg_aus
+  description: Alle Lichter Erdgeschoss ausschalten
+  keywords: [eg aus, erdgeschoss alles aus, erdgeschoss licht aus]
+  actions: [turn_off]
+  domain: light
+  meta: Schaltet alle lichter im Erdgeschoss aus, kann nur ausschalten, nicht einschalten
+- id: light.licht_og_aus
+  description: Alle Lichter Obergeschoss ausschalten
+  keywords: [og aus, obergeschoss alles aus, obergeschoss licht aus]
+  actions: [turn_off]
+  domain: light
+  meta: Schaltet alle lichter im Obergeschoss aus, kann nur ausschalten, nicht einschalten
+- id: light.licht_aussen_kg
+  description: Aussenlicht Kellergeschoss
+  keywords: [aussen kg, aussenlicht keller]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_aussen_eg
+  description: Aussenlicht Erdgeschoss Terrasse
+  keywords: [aussen eg, terrasse, terrassenlicht]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_aussen_og
+  description: Aussenlicht Obergeschoss Balkon
+  keywords: [aussen og, balkon, balkonlicht]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: light.licht_stiege_aussen
+  description: Aussenbeleuchtung Stiege Eingang
+  keywords: [stiege aussen, eingang aussen, aussenstiege]
+  actions: [turn_on, turn_off, toggle]
+  domain: light
+  meta: ''
+- id: switch.rollo_paul_auf
+  description: Rollo Zimmer Paul hochfahren
+  keywords: [rollo paul auf, paul rollo hoch, paul rollo oeffnen]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_paul_ab
+  description: Rollo Zimmer Paul runterfahren
+  keywords: [rollo paul ab, paul rollo runter, paul rollo zu]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_max_auf
+  description: Rollo Zimmer Max hochfahren
+  keywords: [rollo max auf, max rollo hoch, max rollo oeffnen]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_max_ab
+  description: Rollo Zimmer Max runterfahren
+  keywords: [rollo max ab, max rollo runter, max rollo zu]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_1_lisa_auf
+  description: Rollo 1 Zimmer Lisa hochfahren
+  keywords: [rollo lisa auf, lisa rollo hoch, rollo 1 lisa auf]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_1_lisa_ab
+  description: Rollo 1 Zimmer Lisa runterfahren
+  keywords: [rollo lisa ab, lisa rollo runter, rollo 1 lisa ab]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_2_lisa_auf
+  description: Rollo 2 Zimmer Lisa hochfahren
+  keywords: [rollo 2 lisa auf, lisa rollo 2 hoch]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_2_lisa_ab
+  description: Rollo 2 Zimmer Lisa runterfahren
+  keywords: [rollo 2 lisa ab, lisa rollo 2 runter]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_eltern_auf
+  description: Rollo Elternschlafzimmer hochfahren
+  keywords: [rollo eltern auf, eltern rollo hoch, schlafzimmer rollo auf]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_eltern_ab
+  description: Rollo Elternschlafzimmer runterfahren
+  keywords: [rollo eltern ab, eltern rollo runter, schlafzimmer rollo ab]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_kuche_auf
+  description: Rollo Kueche hochfahren
+  keywords: [rollo kueche auf, kueche rollo hoch, kueche rollo oeffnen]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_kuche_ab
+  description: Rollo Kueche runterfahren
+  keywords: [rollo kueche ab, kueche rollo runter, kueche rollo zu]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_1_essen_auf
+  description: Rollo 1 Essbereich hochfahren
+  keywords: [rollo essen auf, rollo essen 1 auf, essen rollo hoch]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_1_essen_ab
+  description: Rollo 1 Essbereich runterfahren
+  keywords: [rollo essen ab, rollo essen 1 ab, essen rollo runter]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_2_essen_auf
+  description: Rollo 2 Essbereich hochfahren
+  keywords: [rollo essen 2 auf, essen rollo 2 hoch]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_2_essen_ab
+  description: Rollo 2 Essbereich runterfahren
+  keywords: [rollo essen 2 ab, essen rollo 2 runter]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_1_wohnzimmer_auf
+  description: Rollo 1 Wohnzimmer hochfahren
+  keywords: [rollo wohnzimmer auf, rollo wohnzimmer 1 auf, wohnzimmer rollo hoch]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_1_wohnzimmer_ab
+  description: Rollo 1 Wohnzimmer runterfahren
+  keywords: [rollo wohnzimmer ab, rollo wohnzimmer 1 ab, wohnzimmer rollo runter]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_2_wohnzimmer_auf
+  description: Rollo 2 Wohnzimmer hochfahren
+  keywords: [rollo wohnzimmer 2 auf, wohnzimmer rollo 2 hoch]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_2_wohnzimmer_ab
+  description: Rollo 2 Wohnzimmer runterfahren
+  keywords: [rollo wohnzimmer 2 ab, wohnzimmer rollo 2 runter]
+  actions: [turn_on]
+  domain: switch
+  meta: ''
+- id: switch.rollo_eg_auf
+  description: Alle Rollos Erdgeschoss hochfahren
+  keywords: [rollos eg auf, alle rollos eg hoch, eg rollos auf]
+  actions: [turn_on]
+  domain: switch
+  meta: Steuert alle Rollos im Erdgeschoss gleichzeitig. Gut wenn der user alle Rolos im EG auf einmal hochfahren möchte
+- id: switch.rollo_eg_ab
+  description: Alle Rollos Erdgeschoss runterfahren
+  keywords: [rollos eg ab, alle rollos eg runter, eg rollos zu]
+  actions: [turn_on]
+  domain: switch
+  meta: Steuert alle Rollos im Erdgeschoss gleichzeitig. Gut wenn der user alle Rolos im EG auf einmal runterfahren möchte
+- id: switch.rollo_og_auf
+  description: Alle Rollos Obergeschoss hochfahren
+  keywords: [rollos og auf, alle rollos og hoch, og rollos auf]
+  actions: [turn_on]
+  domain: switch
+  meta: Steuert alle Rollos im Obergeschoss gleichzeitig. Gut wenn der user alle Rolos im OG auf einmal hochfahren möchte
+- id: switch.rollo_og_ab
+  description: Alle Rollos Obergeschoss runterfahren
+  keywords: [rollos og ab, alle rollos og runter, og rollos zu]
+  actions: [turn_on]
+  domain: switch
+  meta: Steuert alle Rollos im Obergeschoss gleichzeitig. Gut wenn der user alle Rolos im OG auf einmal runterfahren möchte
+- id: automation.trigger_tor_geh
+  description: Fussgaengertor oeffnen
+  keywords: [tor geh, gehtor, fussgaengertor, kleines tor, tor auf]
+  actions: [trigger]
+  domain: automation
+  meta: ''
+- id: automation.trigger_tor_geh_fix
+  description: Fussgaengertor fixieren dauerhaft offen
+  keywords: [tor geh fix, gehtor fix, tor fix]
+  actions: [trigger]
+  domain: automation
+  meta: ''
+- id: automation.trigger_tor_auto
+  description: Autotor oeffnen
+  keywords: [autotor, garagentor, tor auto, grosses tor]
+  actions: [trigger]
+  domain: automation
+  meta: ''
+- id: automation.trigger_tor_auto_fix
+  description: Autotor fixieren dauerhaft offen
+  keywords: [autotor fix, garagentor fix, tor auto fix]
+  actions: [trigger]
+  domain: automation
+  meta: ''
+- id: automation.trigger_pool_pump_on
+  description: Pool Pumpe einschalten
+  keywords: [pool pumpe an, pool pumpe ein, pumpe pool an]
+  actions: [trigger]
+  domain: automation
+  meta: ''
+- id: automation.trigger_pool_pump_off
+  description: Pool Pumpe ausschalten
+  keywords: [pool pumpe aus, pumpe pool aus]
+  actions: [trigger]
+  domain: automation
+  meta: ''
+- id: automation.trigger_pool_heat_pump_on
+  description: Pool Heizpumpe einschalten
+  keywords: [pool heizung an, pool heizen, pool heizpumpe an]
+  actions: [trigger]
+  domain: automation
+  meta: ''
+- id: automation.trigger_pool_heat_pump_off
+  description: Pool Heizpumpe ausschalten
+  keywords: [pool heizung aus, pool heizpumpe aus]
+  actions: [trigger]
+  domain: automation
+  meta: ''
+- id: climate.eco_elyo_pool_eco_elyo
+  description: Pool Waermepumpe (Eco Elyo) - Betriebsmodus und Temperaturen
+  keywords: [pool waermepumpe, pool heizung status, eco elyo, pool heizung temperatur, pool heizung modus]
+  actions: []
+  domain: climate
+  meta: ''
+- id: sensor.pool_weather_temperature
+  description: Außentemperatur
+  keywords: [outside air temperatur, wie warm draußen]
+  actions: []
+  domain: sensor
+  meta: ''
+- id: sensor.plug_server_power
+  description: Stromverbrauch Server Steckdose
+  keywords: [server strom, server verbrauch, server leistung, plug server]
+  actions: []
+  domain: sensor
+  meta: ''
+- id: sensor.sn_3015651602_pv_power
+  description: Aktuelle PV Leistung (Photovoltaik Erzeugung)
+  keywords: [pv, photovoltaik, solar, solarleistung, pv leistung, pv erzeugung, wie viel strom erzeugt]
+  actions: []
+  domain: sensor
+  meta: ''
+- id: sensor.sn_3015651602_battery_soc_total
+  description: Batterie Ladezustand gesamt (SoC)
+  keywords: [batterie, akku, batterie stand, batterie prozent, soc, ladezustand]
+  actions: []
+  domain: sensor
+  meta: ''
+- id: binary_sensor.abstellkammer_tur
+  description: Tuer Abstellkammer Kontakt (offen/zu)
+  keywords: [abstellkammer tuer, abstellkammer tur, abstellraum tuer, kammer tuer, tuer abstellkammer offen]
+  actions: []
+  domain: binary_sensor
+  meta: ''

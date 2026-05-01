@@ -1,0 +1,3 @@
+# Blacklist for the test fixture - keep empty by default, fill as needed.
+# Patterns are matched against entity_id with fnmatch.
+blacklist: []
