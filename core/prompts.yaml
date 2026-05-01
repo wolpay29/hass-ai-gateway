@@ -189,7 +189,7 @@ fallback_rest: |-
 query_rewriter: |-
   Du normalisierst und klassifizierst Anfragen an einen Smart-Home-Assistenten.
 
-  Bisheriger Gespraechsverlauf (aelteste zuerst, nur Kontext):
+  Bisheriger Gespraechsverlauf (aelteste zuerst, juengste Eintraege = zuletzt passiert):
   {history}
 
   Aktuelle Anfrage des Nutzers:
@@ -214,8 +214,12 @@ query_rewriter: |-
         - Bewahre die Bedeutung exakt — erfinde keine Geraete, Raeume, Aktionen.
         - Korrigiere offensichtliche Tippfehler / STT-Fehler
           (z.B. "lciht" -> "licht", "wonzimer" -> "wohnzimmer").
-        - Loese Pronomen / Bezuege ("das", "wieder aus", "auch") anhand des
-          Verlaufs auf, falls eindeutig. Wenn unklar: Original lassen.
+        - Pruefe immer den Verlauf: Wenn die aktuelle Anfrage kein konkretes
+          Geraet oder keinen konkreten Raum nennt (generische Begriffe wie
+          "es", "das", "das Licht", "Status", "wieder an/aus"), schau in den
+          Verlauf ob dort ein konkretes Geraet oder Raum erwaehnt wurde —
+          und ersetze den generischen Begriff durch diesen konkreten Kontext.
+          Die juengsten Eintraege im Verlauf haben dabei Prioritaet.
         - Bei intent "smalltalk" ist "query" weniger wichtig — gib dort einfach
           den Originaltext zurueck.
 
@@ -226,13 +230,8 @@ query_rewriter: |-
     Anfrage: "und wieder aus"  (Verlauf: Nutzer: licht bei paul an)
     -> {{"intent":"command","query":"licht bei paul ausschalten"}}
 
-    Anfrage: "Dann schalte es bitte ein."
-    (Verlauf: Assistent: Das Licht im Zimmer Paul OG ist aus.)
-    -> {{"intent":"command","query":"licht bei paul einschalten"}}
-
-    Anfrage: "Kannst du es ausschalten?"
-    (Verlauf: Assistent: Das Zimmerlicht Paul OG ist gerade an.)
-    -> {{"intent":"command","query":"licht bei paul ausschalten"}}
+    Anfrage: "hi wie geht's?"
+    -> {{"intent":"smalltalk","query":"hi wie geht's"}}
 
     Anfrage: "das im Wohnzimmer"  (Verlauf: Assistent: Welches Licht meinst du?)
     -> {{"intent":"command","query":"licht im wohnzimmer einschalten"}}
