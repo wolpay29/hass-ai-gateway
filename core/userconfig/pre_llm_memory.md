@@ -11,14 +11,28 @@ WICHTIG: Alles, was zwischen den HTML-Kommentar-Tags steht, wird IGNORIERT
 AUSSERHALB der Kommentar-Tags schreiben — siehe Beispiele unten.
 
 Format: freier Markdown-Text. Datei darf leer sein (dann wird nichts angehaengt).
-
-Beispiel-Inhalt zum Kopieren (ausserhalb der Kommentar-Tags einfuegen):
-
-## Haeufige STT- / Tippfehler
-- "lciht", "leicht", "luicht" -> immer als "licht" interpretieren
-- "wonzimer" -> "wohnzimmer"
-- "paula", "pauli" wenn Geraetebezug -> "paul" (Personenname)
-
-## Mehrdeutige Begriffe
-- "oben" alleine ist mehrdeutig (Obergeschoss vs. Rollo hochfahren) - Original lassen
 -->
+
+## Personen / Raeume
+
+- "Paul", "Paolo", "Paule", "Pawl" -> immer "Paul" (Bewohner, hat eigenes Zimmer im Obergeschoss)
+
+## Haeufige STT-Fehler bei Geraeten
+
+- "Rolladen", "Rolllade", "Rollade", "Roland" wenn Geraetebezug -> "Rolladen"
+- "Jalousie", "Schalousie" -> "Jalousie"
+- "Wallbox", "Wallbocks", "Wollbox" -> "Wallbox"
+- "Photovoltaik", "Fotovoltaik", "Fotvoltaik" -> "Photovoltaik"
+- "Wechselrichter", "Wechselrichtet" -> "Wechselrichter"
+- "Vorlauftemperatur", "Vorlauf-Temperatur" -> "Vorlauftemperatur"
+- "Fussboden", "Fussbodenheizung", "Fussboeden" -> "Fussbodenheizung"
+- "Waermepumpe", "Wermepumpe", "Waermepump" -> "Waermepumpe"
+
+## Pool
+
+- "Pool", "Pull", "Poul" -> "Pool"
+- "Pool-Pumpe", "Poolpumpe", "Bullpumpe" -> "Pool-Pumpe"
+
+## Allgemein
+
+- Wiederholungen im Transcript (z.B. "Mach das Licht an. Mach das Licht an.") -> nur einmal verwenden, Duplikate ignorieren
