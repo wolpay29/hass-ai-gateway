@@ -527,9 +527,20 @@ def _execute_case(
         if audio:
             wav_path = THIS_DIR / "fixtures" / "audio" / audio
             if not wav_path.is_file():
-                err_msg = f"missing fixture audio: {wav_path}"
-                resp = None
-            else:
+                # try alternative extensions (.m4a, .mp3, .ogg) before failing
+                stem = wav_path.stem
+                alt = next(
+                    (wav_path.with_name(stem + ext) for ext in _AUDIO_MIME
+                     if ext != wav_path.suffix.lower()
+                     and wav_path.with_name(stem + ext).is_file()),
+                    None,
+                )
+                if alt:
+                    wav_path = alt
+                else:
+                    err_msg = f"missing fixture audio: {wav_path}"
+                    resp = None
+            if not err_msg:
                 resp = _post_audio(port, wav_path, device_id, tts, api_key)
         elif text is not None:
             resp = _post_text(port, text, device_id, tts, api_key)
