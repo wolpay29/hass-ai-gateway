@@ -54,6 +54,7 @@ addon/_data/
 tests/e2e/.env.local
 tests/e2e/_runs/
 tests/e2e/reports/
+tests/e2e/venv/
 tests/e2e/fixtures/audio/
 tests/e2e/fixtures/text/
 
