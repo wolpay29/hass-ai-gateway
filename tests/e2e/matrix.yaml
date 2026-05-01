@@ -63,6 +63,14 @@ runs:
       LLM_PREPROCESSOR: "true"
       FALLBACK_MODE: "1"
 
+  # MCP-Fallback deaktiviert - zum Reaktivieren auskommentieren und LMSTUDIO_API_KEY + HA-MCP-Server benoetigt
+  # - name: "rag-on-prellm-on-fb2"
+  #   description: "RAG + Rewriter, MCP-Fallback (LM Studio + HA-MCP-Server)"
+  #   env:
+  #     RAG_ENABLED: "true"
+  #     LLM_PREPROCESSOR: "true"
+  #     FALLBACK_MODE: "2"
+
   - name: "rag-on-prellm-off-fb0"
     description: "RAG aktiv aber ohne Rewriter (Pronomen/Tippos schwerer)"
     env:
@@ -92,6 +100,14 @@ runs:
       RAG_ENABLED: "false"
       LLM_PREPROCESSOR: "true"
       FALLBACK_MODE: "1"
+
+  # MCP-Fallback deaktiviert - zum Reaktivieren auskommentieren und LMSTUDIO_API_KEY + HA-MCP-Server benoetigt
+  # - name: "rag-off-prellm-on-fb2"
+  #   description: "Nur entities.yaml + Rewriter, MCP-Fallback fuer fehlende Entities"
+  #   env:
+  #     RAG_ENABLED: "false"
+  #     LLM_PREPROCESSOR: "true"
+  #     FALLBACK_MODE: "2"
 
   - name: "rag-off-prellm-off-fb0"
     description: "Minimal-Setup ohne alles - testet nur den Primary-Parser"
