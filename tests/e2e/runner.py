@@ -1,7 +1,7 @@
 """End-to-end test runner for hass-ai-gateway.
 
 For each settings variant in matrix.yaml the runner:
-  1. Builds an isolated .env (.env.local + common_env + matrix env) and writes
+  1. Builds an isolated .env (root .env + common_env + matrix env) and writes
      it under _runs/<run>/.env.
   2. Optionally rebuilds the RAG index against the test fixtures.
   3. Spawns services/voice_gateway/main.py as a subprocess on GATEWAY_PORT.
@@ -45,18 +45,8 @@ REPO_ROOT = THIS_DIR.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
-def _resolve_gateway_python(local_env: dict | None = None) -> str:
-    """Find the Python that has uvicorn available.
-
-    Priority:
-      1. GATEWAY_PYTHON in .env.local
-      2. Same interpreter as the runner (sys.executable) if uvicorn importable
-      3. uvicorn binary on PATH -> derive sibling python
-      4. Fallback to sys.executable with a warning
-    """
-    if local_env and local_env.get("GATEWAY_PYTHON"):
-        return local_env["GATEWAY_PYTHON"]
-
+def _resolve_gateway_python() -> str:
+    """Find the Python that has uvicorn available."""
     import importlib.util
     if importlib.util.find_spec("uvicorn") is not None:
         return sys.executable
@@ -70,11 +60,7 @@ def _resolve_gateway_python(local_env: dict | None = None) -> str:
         if candidate3.is_file():
             return str(candidate3)
 
-    print(
-        "WARNING: uvicorn not found in current Python or PATH. "
-        "Set GATEWAY_PYTHON=/path/to/python in tests/e2e/.env.local",
-        file=sys.stderr,
-    )
+    print("WARNING: uvicorn not found in current Python or PATH.", file=sys.stderr)
     return sys.executable
 
 
@@ -100,7 +86,7 @@ def _load_env_file(path: Path) -> dict[str, str]:
 
 
 def _build_env(local_env: dict, common: dict, run_env: dict, run_name: str) -> dict[str, str]:
-    """Merge: .env.local + common_env + run-specific env. {repo_root}/{run} substituted."""
+    """Merge: root .env + common_env + run-specific env. {repo_root}/{run} substituted."""
     merged: dict[str, str] = {}
     for src in (local_env, common or {}, run_env or {}):
         for k, v in src.items():
@@ -362,12 +348,12 @@ def main() -> int:
 
     matrix = _load_yaml(THIS_DIR / "matrix.yaml")
     cases = _load_yaml(THIS_DIR / "cases.yaml")
-    local_env = _load_env_file(THIS_DIR / ".env.local")
+    local_env = _load_env_file(REPO_ROOT / ".env")
     if not local_env:
-        print("ERROR: tests/e2e/.env.local missing. Copy .env.local.example and fill in values.", file=sys.stderr)
+        print("ERROR: root .env missing. Copy .env.example and fill in values.", file=sys.stderr)
         return 2
 
-    gateway_python = _resolve_gateway_python(local_env)
+    gateway_python = _resolve_gateway_python()
     print(f"Gateway Python: {gateway_python}")
 
     runs_all = matrix.get("runs", [])

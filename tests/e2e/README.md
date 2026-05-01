@@ -11,9 +11,9 @@ The production addon keeps running on port `8765`; the test subprocess runs on
 ## Quick start
 
 ```bash
-# 1. one-time setup
-cp tests/e2e/.env.local.example tests/e2e/.env.local
-nano tests/e2e/.env.local
+# 1. one-time setup — only needed if you don't have a root .env yet
+cp .env.example .env
+nano .env
 
 # 2. record audio files (see fixtures/AUDIO_RECORDING_LIST.md)
 #    place them in tests/e2e/fixtures/audio/ (.wav or .m4a)
@@ -65,12 +65,11 @@ players reference WAV files at `audio/<variant>/<case>.wav` relative to the repo
 
 - Python 3.11+, `requirements.txt` installed (uvicorn, fastapi, python-telegram-bot,
   requests, pyyaml, sqlite-vec, ...). A bare-metal `pip install -e .[dev]` is enough.
-- LM Studio + Whisper server + embed server + Home Assistant reachable (same external
-  services as the production addon).
+- A root `.env` with the service URLs filled in (same file the production addon uses).
+  The test runner reads it directly — no separate test env file needed.
+- LM Studio + Whisper server + embed server + Home Assistant reachable.
 - Audio files under `fixtures/audio/` (see `fixtures/AUDIO_RECORDING_LIST.md`).
   Supported formats: `.wav`, `.m4a`, `.mp3`, `.ogg`.
-- Optional for fb-2 (MCP fallback): LM Studio server auth active, HA MCP server
-  running, `LMSTUDIO_API_KEY` set.
 
 ## CLI flags
 
