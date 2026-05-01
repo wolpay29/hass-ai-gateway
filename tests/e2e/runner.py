@@ -635,8 +635,8 @@ def _reconstruct_result(resp: dict | None, steps) -> dict:
             }
             for c in steps.ha_calls if c.get("entity_id")
         ]
-    # If reply still empty, prefer parsed-LLM reply -> smalltalk -> raw audio marker
-    if not out["reply"]:
+    # If reply is empty or the audio placeholder, reconstruct from log evidence.
+    if not out["reply"] or out["reply"] == "<audio reply>":
         if steps.llm_parsed and isinstance(steps.llm_parsed, dict):
             out["reply"] = (steps.llm_parsed.get("reply") or "").strip()
         if not out["reply"] and steps.smalltalk_reply:
