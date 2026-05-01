@@ -567,7 +567,7 @@ def _format_entity_with_state(e: dict, ha_state: dict | None) -> str:
     return line
 
 
-def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -> dict | None:
+def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0, rewriter_query: str = "") -> dict | None:
     """RAG path: entity list mit aktuellen States, Attributen und expliziten actions.
 
     Expected shape of each dict in `entities`:
@@ -602,6 +602,11 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
         f"Modell: {LMSTUDIO_MODEL} | History: {len(history) // 2}"
     )
 
+    user_content = (
+        f"[Vorverarbeitung: {rewriter_query}]\n{transcript}"
+        if rewriter_query and rewriter_query != transcript else transcript
+    )
+
     try:
         endpoint = f"{LMSTUDIO_URL}/v1/chat/completions"
         payload = {
@@ -609,7 +614,7 @@ def parse_command_rag(transcript: str, entities: list[dict], chat_id: int = 0) -
             "messages": [
                 {"role": "system", "content": system_prompt},
                 *_clean_history_for_llm(history),
-                {"role": "user", "content": transcript},
+                {"role": "user", "content": user_content},
             ],
             "temperature": LMSTUDIO_TEMPERATURE,
         }

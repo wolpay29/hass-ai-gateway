@@ -119,7 +119,7 @@ def _resolve_command(transcript: str, embed_query: str, chat_id: int) -> dict | 
 
             if rag_entities:
                 logger.info(f"[Processor] RAG path | {len(rag_entities)} candidates")
-                parsed = parse_command_rag(transcript, rag_entities, chat_id=chat_id)
+                parsed = parse_command_rag(transcript, rag_entities, chat_id=chat_id, rewriter_query=embed_query)
                 if parsed and parsed.get("clarification_question") and not parsed.get("actions"):
                     return {"_clarify": parsed["clarification_question"]}
                 return parsed
