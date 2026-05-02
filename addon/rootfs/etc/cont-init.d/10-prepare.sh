@@ -32,36 +32,36 @@ bashio::log.info "hass-ai-gateway: user config ready at /addon_configs/<slug>/"
 ERRORS=0
 fail() { bashio::log.fatal "$1"; ERRORS=$((ERRORS+1)); }
 
-if bashio::config.true 'services.telegram_bot'; then
-    bashio::config.has_value 'telegram.bot_token' \
-        || fail "services.telegram_bot=true but telegram.bot_token is empty (get one from @BotFather)"
-    [ "$(bashio::config 'telegram.chat_id')" != "0" ] \
-        || fail "services.telegram_bot=true but telegram.chat_id is 0 (your numeric Telegram user id)"
+if bashio::config.true 'enable_telegram_bot'; then
+    bashio::config.has_value 'telegram_bot_token' \
+        || fail "enable_telegram_bot=true but telegram_bot_token is empty (get one from @BotFather)"
+    [ "$(bashio::config 'telegram_chat_id')" != "0" ] \
+        || fail "enable_telegram_bot=true but telegram_chat_id is 0 (your numeric Telegram user id)"
 fi
 
-if bashio::config.true 'services.voice_gateway' || bashio::config.true 'services.telegram_bot'; then
-    bashio::config.has_value 'lmstudio.url' \
-        || fail "lmstudio.url is empty — required when voice_gateway or telegram_bot is enabled"
+if bashio::config.true 'enable_voice_gateway' || bashio::config.true 'enable_telegram_bot'; then
+    bashio::config.has_value 'lmstudio_url' \
+        || fail "lmstudio_url is empty — required when voice gateway or telegram bot is enabled"
 fi
 
-if bashio::config.true 'services.voice_gateway' || bashio::config.true 'services.notify_gateway'; then
-    bashio::config.has_value 'whisper.external_url' \
-        || bashio::log.warning "whisper.external_url is empty — voice features (audio upload) will be unavailable"
+if bashio::config.true 'enable_voice_gateway' || bashio::config.true 'enable_notify_gateway'; then
+    bashio::config.has_value 'whisper_url' \
+        || bashio::log.warning "whisper_url is empty — voice features (audio upload) will be unavailable"
 fi
 
-if bashio::config.true 'rag.enabled'; then
-    bashio::config.has_value 'rag.embed_url' \
-        || bashio::log.notice "rag.embed_url empty — falling back to lmstudio.url for embeddings"
+if bashio::config.true 'rag_enabled'; then
+    bashio::config.has_value 'rag_embed_url' \
+        || bashio::log.notice "rag_embed_url empty — falling back to lmstudio_url for embeddings"
     if [ ! -s /data/rag/entities.sqlite ]; then
         bashio::log.notice "RAG aktiv, aber Index noch leer - Rebuild ueber Telegram /rag_rebuild oder POST /rag_rebuild starten (Primary-Parser uebernimmt solange als Backup)"
     fi
 fi
 
-if bashio::config.true 'llm_preprocessor.enabled'; then
-    bashio::config.has_value 'llm_preprocessor.url' \
-        || bashio::log.notice "llm_preprocessor.url empty — falling back to lmstudio.url"
-    bashio::config.has_value 'llm_preprocessor.model' \
-        || bashio::log.notice "llm_preprocessor.model empty — falling back to lmstudio.model"
+if bashio::config.true 'preprocessor_enabled'; then
+    bashio::config.has_value 'preprocessor_url' \
+        || bashio::log.notice "preprocessor_url empty — falling back to lmstudio_url"
+    bashio::config.has_value 'preprocessor_model' \
+        || bashio::log.notice "preprocessor_model empty — falling back to lmstudio_model"
 fi
 
 if [ "${ERRORS}" -gt 0 ]; then

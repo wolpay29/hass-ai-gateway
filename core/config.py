@@ -46,20 +46,10 @@ BATTERY_THRESHOLD = float(os.getenv("BATTERY_THRESHOLD", "80"))
 TTS_EXTERNAL_URL = os.getenv("TTS_EXTERNAL_URL", "")
 TTS_EXTERNAL_VOICE = os.getenv("TTS_EXTERNAL_VOICE", "de_DE-thorsten-low")
 
-# Whisper Backend: "local" oder "external"
-WHISPER_BACKEND = os.getenv("WHISPER_BACKEND", "local").lower()
-
-# Lokales Whisper (faster-whisper)
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
-WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
-WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
-WHISPER_THREADS = int(os.getenv("WHISPER_THREADS", "4"))
-WHISPER_BEAM_SIZE = int(os.getenv("WHISPER_BEAM_SIZE", "1"))
-WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "de")
-
-# Externes Whisper (HTTP API auf KI-PC)
-WHISPER_EXTERNAL_URL = os.getenv("WHISPER_EXTERNAL_URL", "http://10.1.10.78:10300/v1/audio/transcriptions")
+# External Whisper (OpenAI-compatible /v1/audio/transcriptions endpoint).
+WHISPER_EXTERNAL_URL = os.getenv("WHISPER_EXTERNAL_URL", "")
 WHISPER_EXTERNAL_MODEL = os.getenv("WHISPER_EXTERNAL_MODEL", "deepdml/faster-whisper-large-v3-turbo-ct2")
+WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", LANGUAGE)
 
 VOICE_REPLY_WITH_TRANSCRIPT = os.getenv("VOICE_REPLY_WITH_TRANSCRIPT", "true").lower() == "true"
 VOICE_DOWNLOAD_DIR = os.getenv("VOICE_DOWNLOAD_DIR", "data/voice")

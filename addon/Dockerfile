@@ -5,7 +5,6 @@ ENV LANG=C.UTF-8 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/opt/gateway \
-    WHISPER_BACKEND=external \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     DEBIAN_FRONTEND=noninteractive
 
@@ -30,16 +29,13 @@ COPY _build/services/voice_gateway/     /opt/gateway/services/voice_gateway/
 COPY _build/services/notify_gateway/    /opt/gateway/services/notify_gateway/
 COPY _build/services/telegram_bot/      /opt/gateway/services/telegram_bot/
 
-# Install Python deps. faster-whisper/ctranslate2 excluded (WHISPER_BACKEND=external).
+# Install Python deps. STT is always external in the addon — no faster-whisper.
 RUN set -e \
- && grep -v -E '^[[:space:]]*faster-whisper' \
-        /opt/gateway/services/voice_gateway/requirements.txt  > /tmp/req-vg.txt \
- && grep -v -E '^[[:space:]]*faster-whisper' \
-        /opt/gateway/services/notify_gateway/requirements.txt > /tmp/req-ng.txt \
- && grep -v -E '^[[:space:]]*faster-whisper' \
-        /opt/gateway/services/telegram_bot/requirements.txt  > /tmp/req-tb.txt \
  && pip install --no-cache-dir --upgrade pip wheel \
- && pip install --no-cache-dir -r /tmp/req-vg.txt -r /tmp/req-ng.txt -r /tmp/req-tb.txt
+ && pip install --no-cache-dir \
+        -r /opt/gateway/services/voice_gateway/requirements.txt \
+        -r /opt/gateway/services/notify_gateway/requirements.txt \
+        -r /opt/gateway/services/telegram_bot/requirements.txt
 
 # s6-overlay service definitions + cont-init.
 COPY rootfs/ /

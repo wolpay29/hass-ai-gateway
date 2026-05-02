@@ -6,4 +6,3 @@ requests>=2.31
 python-dotenv>=1.0
 pyyaml
 sqlite-vec
-faster-whisper>=1.0

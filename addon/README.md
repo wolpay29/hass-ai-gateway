@@ -12,8 +12,8 @@ or via a **Raspberry Pi / ESP32** with a wake word ("Hey Jarvis") next to any ro
 
 Each request flows through the same pipeline:
 
-1. **Speech-to-text** — voice recordings are transcribed by Whisper (local or
-   external server) into plain text.
+1. **Speech-to-text** — voice recordings are transcribed by an external Whisper
+   server into plain text.
 2. **Intent & query rewrite (pre-LLM)** — a small LLM call classifies the
    request as a command, smalltalk, or clarification, and normalizes the phrase
    for better search results.
@@ -52,20 +52,21 @@ retrieval), so a single container is the natural unit.
    `https://github.com/wolpay29/hass-ai-gateway`, click **Add**.
 2. Find **Hass AI Gateway** in the store and **Install**.
 3. Open the **Configuration** tab, fill in at minimum:
-   - `telegram.bot_token`, `telegram.chat_id`
-   - `home_assistant.token` (or leave blank to use the Supervisor token)
-   - `lmstudio.url`
+   - `telegram_bot_token`, `telegram_chat_id`
+   - `ha_token` (or leave blank to use the Supervisor token)
+   - `lmstudio_url`
 4. Save, then **Start** the add-on.
 
 See `DOCS.md` (Documentation tab in HA) for the full option reference,
 example HA `rest_command` / `notify` integrations, and troubleshooting.
 
-## Whisper
+## Whisper (STT)
 
-External Whisper only in v1.0 (`WHISPER_BACKEND` is hard-pinned to `external`).
-Run a separate Whisper server -- [`../infra/faster_whisper/`](../infra/faster_whisper)
-ships a docker-compose that does this -- and point `whisper.external_url` at it.
-A dedicated `addon_whisper` add-on may ship later.
+Voice input requires an external OpenAI-compatible STT server.
+The repo's [`../infra/faster_whisper/`](../infra/faster_whisper) ships a
+docker-compose that starts one. Set `whisper_url` to its transcription
+endpoint (e.g. `http://192.168.1.x:10300/v1/audio/transcriptions`).
+Leave `whisper_url` empty if you only use text commands.
 
 ## Source
 

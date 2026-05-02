@@ -1,208 +1,143 @@
 configuration:
-  services:
-    name: Services
-    description: >-
-      Enable / disable the three services. Each one runs independently in the
-      same container.
-  services.voice_gateway:
-    name: Voice Gateway
-    description: >-
-      HTTP API on port 8765 for RPi / ESP32 audio clients. Required if you use
-      hardware voice clients.
-  services.notify_gateway:
-    name: Notify Gateway
-    description: >-
-      HTTP API on port 8766 that Home Assistant can post notifications to.
-      Fans messages out to TTS and / or Telegram.
-  services.telegram_bot:
-    name: Telegram Bot
-    description: >-
-      Long-polling Telegram bot. Voice + text commands and the menu system
-      from menus.yaml.
+  language:
+    name: Language
+    description: UI strings, LLM prompts, and Whisper transcription language. `de` or `en`.
 
-  telegram:
-    name: Telegram
-    description: >-
-      Only used when the "Telegram Bot" service is enabled. Ignored otherwise —
-      you can leave this section blank if you only use voice_gateway and/or
-      notify_gateway.
-  telegram.bot_token:
-    name: Bot Token (required if Telegram Bot is enabled)
-    description: Get this from @BotFather.
-  telegram.chat_id:
-    name: Chat ID (required if Telegram Bot is enabled)
-    description: >-
-      Your numeric Telegram user id. The bot only answers to this id.
-      Must not be 0 when telegram_bot is on.
+  enable_voice_gateway:
+    name: Enable Voice Gateway
+    description: HTTP API on port 8765 for RPi / ESP32 audio clients.
+  enable_notify_gateway:
+    name: Enable Notify Gateway
+    description: HTTP API on port 8766 that Home Assistant posts notifications to. Fans messages out to TTS and / or Telegram.
+  enable_telegram_bot:
+    name: Enable Telegram Bot
+    description: Long-polling Telegram bot. Voice + text commands and the menu system from menus.yaml.
 
-  home_assistant:
-    name: Home Assistant
-  home_assistant.url:
-    name: URL
-    description: >-
-      Default `http://supervisor/core` works inside the add-on. Override only
-      for external HA instances.
-  home_assistant.token:
-    name: Long-lived token
-    description: >-
-      Leave empty to use the supervisor token automatically. Only needed when
-      pointing at an external HA instance.
-  home_assistant.service_timeout:
-    name: Service call timeout (s)
+  telegram_bot_token:
+    name: Telegram Bot Token
+    description: Required if Telegram Bot is enabled. Get from @BotFather.
+  telegram_chat_id:
+    name: Telegram Chat ID
+    description: Required if Telegram Bot is enabled. Your numeric Telegram user id — the bot only answers to this id.
 
-  whisper:
-    name: Whisper (STT)
-    description: >-
-      External Whisper server for speech-to-text. Required ONLY for voice
-      input (RPi clients, Telegram voice messages). Text-only commands work
-      without it.
-  whisper.external_url:
+  ha_url:
+    name: Home Assistant URL
+    description: Default `http://supervisor/core` works inside the add-on. Override only for external HA instances.
+  ha_token:
+    name: Home Assistant Token
+    description: Leave empty to use the supervisor token automatically. Only needed when pointing at an external HA instance.
+  ha_service_timeout:
+    name: HA service call timeout (s)
+  ha_dry_run:
+    name: HA dry-run mode
+    description: When on, service calls are only logged — no real HA actions are executed.
+
+  whisper_url:
     name: Whisper URL
-    description: >-
-      e.g. `http://192.168.1.10:9100`. Leave empty if you only use text. Set
-      up the faster_whisper helper from `infra/faster_whisper/` or any
-      compatible OpenAI-API server.
-  whisper.external_model:
-    name: Model
-  whisper.language:
-    name: Language code
-    description: e.g. `de`, `en`. Use `auto` to detect.
+    description: External STT server (OpenAI-compatible /v1/audio/transcriptions). Required for voice input. Leave empty if you only use text commands.
+  whisper_model:
+    name: Whisper model
 
-  lmstudio:
-    name: LM Studio (main LLM)
-    description: >-
-      Only needed when voice_gateway or telegram_bot is enabled (notify_gateway
-      alone does not need an LLM). Defaults from this section are reused by
-      the LLM preprocessor and RAG embeddings when those leave URL/model empty.
-  lmstudio.url:
-    name: URL (required if voice_gateway or telegram_bot is enabled)
-    description: e.g. `http://192.168.1.10:1234`.
-  lmstudio.model:
-    name: Model name
+  lmstudio_url:
+    name: LM Studio URL
+    description: Required if Voice Gateway or Telegram Bot is enabled. e.g. `http://192.168.1.10:1234`.
+  lmstudio_model:
+    name: LM Studio model
     description: Must be loaded in LM Studio (or matching server).
-  lmstudio.api_key:
-    name: API key
-    description: Optional. Leave empty if your LM Studio server has no auth.
-  lmstudio.timeout:
-    name: Request timeout (s)
-  lmstudio.temperature:
-    name: Temperature
+  lmstudio_api_key:
+    name: LM Studio API key
+    description: Optional. Leave empty if the server has no auth.
+  lmstudio_timeout:
+    name: LM Studio timeout (s)
+  lmstudio_temperature:
+    name: LM Studio temperature
     description: 0.0–0.3 recommended for deterministic action parsing.
-  lmstudio.no_think:
+  lmstudio_no_think:
     name: Suppress <think> tags
     description: Append a directive that prevents reasoning models from emitting <think> blocks in JSON output.
-  lmstudio.context_length:
-    name: Context length (tokens)
-    description: Must match the loaded model.
-  lmstudio.mcp_allowed_tools:
-    name: MCP allowed tools
-    description: Comma-separated. Only used when fallback.mode = 2 (LM Studio MCP).
-  lmstudio.max_actions_per_command:
+  lmstudio_context_length:
+    name: LM Studio context length
+  lmstudio_mcp_allowed_tools:
+    name: LM Studio MCP allowed tools
+    description: Comma-separated. Only used when fallback mode = 2.
+  lmstudio_max_actions_per_command:
     name: Max actions per command
     description: Cap on simultaneous HA actions per request. 0 = unlimited.
 
-  voice_gateway:
-    name: Voice Gateway
-  voice_gateway.port:
-    name: Port
-  voice_gateway.api_key:
-    name: API key
-    description: >-
-      Optional shared secret. When set, clients must send X-Api-Key header.
-      Leave empty for trusted LAN.
-  voice_gateway.telegram_push:
+  voice_port:
+    name: Voice Gateway port
+  voice_api_key:
+    name: Voice Gateway API key
+    description: Optional shared secret. When set, clients must send X-Api-Key header. Leave empty for trusted LAN.
+  voice_telegram_push:
     name: Forward voice replies to Telegram
-    description: Mirror voice-gateway responses to the Telegram chat. Requires telegram_bot enabled.
-  voice_gateway.reply_with_transcript:
-    name: Include transcript in reply
-    description: When on, the JSON / TTS reply also contains the recognised transcript.
+    description: Requires Telegram Bot enabled.
+  voice_reply_with_transcript:
+    name: Include transcript in voice reply
 
-  notify_gateway:
-    name: Notify Gateway
-  notify_gateway.port:
-    name: Port
-  notify_gateway.http_timeout:
-    name: HTTP timeout (s)
+  notify_port:
+    name: Notify Gateway port
+  notify_http_timeout:
+    name: Notify HTTP timeout (s)
 
-  tts:
-    name: Text-to-Speech (optional)
-    description: External TTS server. When empty, replies stay text-only.
-  tts.external_url:
+  tts_url:
     name: TTS URL
-  tts.external_voice:
-    name: Voice id
+    description: Optional. External TTS server. When empty, replies stay text-only.
+  tts_voice:
+    name: TTS voice id
 
-  rag:
-    name: RAG (semantic entity retrieval)
-    description: >-
-      Replaces the static entities.yaml lookup with vector search over your HA
-      entities. Enable for large installations. After changing entities or
-      this config: send /rag_rebuild in Telegram, or use the rebuild button
-      card described in the Documentation tab.
-  rag.enabled:
+  rag_enabled:
     name: Enable RAG
-  rag.top_k:
-    name: Top-K candidates
-    description: How many entities the parser sees per query.
-  rag.keyword_boost:
-    name: Keyword boost
-    description: Bias toward entities whose keywords match the query (0 = pure vector, higher = stronger keyword preference).
-  rag.embed_url:
-    name: Embedding URL
-    description: Leave empty to reuse lmstudio.url.
-  rag.embed_model:
-    name: Embedding model
-    description: Must be an embedding model loaded in the embedding server.
-  rag.embed_dim:
-    name: Embedding dimension
-    description: Must match the embedding model. Index is rebuilt automatically when this changes.
+    description: Replaces static entities.yaml with vector search over HA entities. After changing entities, send /rag_rebuild in Telegram.
+  rag_top_k:
+    name: RAG Top-K candidates
+  rag_keyword_boost:
+    name: RAG keyword boost
+    description: 0 = pure vector, higher = stronger keyword preference.
+  rag_distance_threshold:
+    name: RAG distance threshold
+    description: 0 = off. Drops candidates above this distance (best candidate always kept).
+  rag_embed_url:
+    name: RAG embedding URL
+    description: Leave empty to reuse LM Studio URL.
+  rag_embed_model:
+    name: RAG embedding model
+  rag_embed_dim:
+    name: RAG embedding dimension
+    description: Must match the embedding model. Index rebuilds automatically when changed.
 
-  llm_preprocessor:
-    name: LLM Preprocessor (query rewriter)
-    description: >-
-      Optional small LLM that runs BEFORE RAG to fix typos / STT errors and
-      classify intent (command vs smalltalk). Independent from RAG — works
-      with or without it.
-  llm_preprocessor.enabled:
-    name: Enable preprocessor
-  llm_preprocessor.url:
-    name: URL
-    description: Leave empty to reuse lmstudio.url.
-  llm_preprocessor.api_key:
-    name: API key
-    description: Leave empty to reuse lmstudio.api_key.
-  llm_preprocessor.model:
-    name: Model
-    description: Leave empty to reuse lmstudio.model. A small fast model is recommended.
-  llm_preprocessor.timeout:
-    name: Timeout (s)
-  llm_preprocessor.temperature:
-    name: Temperature
+  preprocessor_enabled:
+    name: Enable LLM Preprocessor
+    description: Small LLM that fixes typos / STT errors and classifies intent before the main pipeline.
+  preprocessor_url:
+    name: Preprocessor URL
+    description: Leave empty to reuse LM Studio URL.
+  preprocessor_api_key:
+    name: Preprocessor API key
+    description: Leave empty to reuse LM Studio API key.
+  preprocessor_model:
+    name: Preprocessor model
+    description: Leave empty to reuse LM Studio model. A small fast model is recommended.
+  preprocessor_timeout:
+    name: Preprocessor timeout (s)
+  preprocessor_temperature:
+    name: Preprocessor temperature
 
-  fallback:
-    name: Fallback (when primary path returns nothing)
-  fallback.mode:
-    name: Mode
-    description: >-
-      0 = off. 1 = REST: query live HA states and retry the parser with the
-      live entity list. 2 = MCP: send the request to LM Studio with HA-MCP
-      tools (lmstudio.mcp_allowed_tools).
-  fallback.rest_max_entities:
-    name: REST max entities
+  fallback_mode:
+    name: Fallback mode
+    description: 0 = off. 1 = REST (live HA states + retry parser). 2 = MCP (LM Studio with HA-MCP tools).
+  fallback_rest_max_entities:
+    name: Fallback REST max entities
     description: 0 = unlimited. Used by mode 1 to keep the prompt small.
-  fallback.rest_domains:
-    name: REST domains
+  fallback_rest_domains:
+    name: Fallback REST domains
     description: Comma-separated HA domains included in mode-1 fallback.
 
-  history:
-    name: Conversation history
-    description: How many past turns the LLM sees per chat.
-  history.size:
-    name: History size
-    description: 0 disables history (each request is independent).
-  history.include_assistant:
-    name: Include assistant replies
-    description: When off, the LLM only sees past user messages.
-  history.append_executions:
-    name: Append executed actions
-    description: 'Adds an "executed: ..." line so follow-ups like "did it work?" have context.'
+  history_size:
+    name: Conversation history size
+    description: 0 disables history. How many past turns the LLM sees per chat.
+  history_include_assistant:
+    name: Include assistant replies in history
+  history_append_executions:
+    name: Append executed actions to history
+    description: Adds an "executed: ..." line so follow-ups like "did it work?" have context.

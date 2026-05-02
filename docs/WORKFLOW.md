@@ -55,7 +55,7 @@ flowchart TD
     RPI_AUDIO --> GW_AUDIO["voice_gateway /audio"]
     RPI_TEXT  --> GW_TEXT["voice_gateway /text"]
 
-    H_VOICE  --> STT["core.voice.transcribe_audio<br/>(local | external)"]
+    H_VOICE  --> STT["core.voice.transcribe_audio<br/>(external Whisper)"]
     GW_AUDIO --> STT
     STT      --> DISPATCH
     H_TEXT   --> DISPATCH
@@ -157,10 +157,8 @@ The `chat_id` controls **conversation history**:
 
 ### 3.2 Speech-to-text (voice only)
 
-`core.voice.transcribe_audio(path)` switches on `WHISPER_BACKEND`:
-
-- `local` — faster-whisper (`WHISPER_MODEL`, `WHISPER_DEVICE`, `WHISPER_COMPUTE_TYPE`, `WHISPER_THREADS`, `WHISPER_BEAM_SIZE`, `WHISPER_LANGUAGE`).
-- `external` — HTTP POST to `WHISPER_EXTERNAL_URL` (`WHISPER_EXTERNAL_MODEL`).
+`core.voice.transcribe_audio(path)` sends an HTTP POST to `WHISPER_EXTERNAL_URL`
+using `WHISPER_EXTERNAL_MODEL` and `WHISPER_LANGUAGE`.
 
 Empty transcript returns the error reply early (Telegram: ❌ message; Gateway: `{"error": "no_speech"}`).
 
@@ -308,7 +306,7 @@ Renderers:
 |---|---|
 | `BOT_TOKEN`, `MY_CHAT_ID` | Telegram bot identity / receipt target for gateway pushes |
 | `HA_URL`, `HA_TOKEN` | All `core.ha` calls (get_states_bulk, get_all_states, call_service) |
-| `WHISPER_BACKEND` and friends | Local vs external STT |
+| `WHISPER_EXTERNAL_URL`, `WHISPER_EXTERNAL_MODEL`, `WHISPER_LANGUAGE` | External STT server |
 | `LMSTUDIO_*` | Default LLM (parser, smalltalk, MCP fallback) |
 | `LMSTUDIO_TEMPERATURE`, `LMSTUDIO_NO_THINK` | Determinism + `<think>`-tag suppression |
 | `LMSTUDIO_MCP_ALLOWED_TOOLS`, `LMSTUDIO_CONTEXT_LENGTH` | MCP fallback (Mode 2) only |
@@ -422,7 +420,7 @@ If the power had been 18 W the parser would emit `{"actions":[{"entity_id":"swit
 |---|---|
 | [services/telegram_bot/bot/handlers.py](../services/telegram_bot/bot/handlers.py) | Telegram entry: text/voice handlers, message formatting |
 | [services/voice_gateway/main.py](../services/voice_gateway/main.py) | FastAPI gateway for RPi/ESP32, TTS routing, Telegram receipt push |
-| [core/voice.py](../core/voice.py) | Whisper STT (local + external) |
+| [core/voice.py](../core/voice.py) | Whisper STT (external server) |
 | [core/processor.py](../core/processor.py) | The shared brain — orchestrates everything |
 | [core/rag/rewriter.py](../core/rag/rewriter.py) | Pre-RAG: intent classification + query normalization |
 | [core/rag/index.py](../core/rag/index.py) | Build / query the entity vector index |

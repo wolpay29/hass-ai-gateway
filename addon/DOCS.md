@@ -28,7 +28,6 @@ on first start and your edits persist across add-on updates.
 | `userconfig/entities_blacklist.yaml` | Entity-id patterns excluded from RAG indexing |
 | `userconfig/pre_llm_memory.md` | Free-text hints appended to the query-rewriter prompt (typo/STT fixes, pronoun rules) |
 | `userconfig/post_llm_memory.md` | Free-text hints appended to all parser prompts (common errors, preferences, never-do rules) |
-| `userconfig/whisper_vocabulary.md` | Vocabulary hints sent as Whisper `initial_prompt` (room names, smart-home jargon, names) |
 | `menus.yaml` | Telegram bot menus, buttons, and action mappings |
 
 ### `entities.yaml`
@@ -113,22 +112,6 @@ Use it for action preferences and never-do rules.
 - Never trigger automation.vacation_mode — always ask first
 ```
 
-### `whisper_vocabulary.md`
-
-Free-text Markdown sent to the Whisper STT model as `initial_prompt`. Whisper
-prefers tokens that appear in the prompt, so this dramatically improves the
-recognition of German smart-home terms, room names, and personal names. HTML
-comments are stripped before use - leaving only the comment block disables
-the feature (Whisper default behaviour).
-
-```markdown
-Wohnzimmer, Schlafzimmer, Kueche, Erdgeschoss, Obergeschoss.
-Rolladen, Wallbox, Photovoltaik, Wechselrichter, Pool-Pumpe.
-Paul, Max, Sophie.
-```
-
-Restart the add-on after editing.
-
 After editing: restart the add-on. After editing `entities.yaml` while RAG is
 enabled, also send `/rag_rebuild` in the Telegram chat (or `POST /rag_rebuild`
 to the voice gateway, see "RAG rebuild from HA" below).
@@ -140,136 +123,99 @@ All other settings (tokens, URLs, model names, RAG/fallback toggles) are in the
 
 ## Configuration
 
-Configuration is grouped in the UI. The sections below mirror what you'll see
-in the **Configuration** tab.
+All settings are flat fields in the **Configuration** tab — no nested sections.
+The groups below are for documentation purposes only.
 
-### `services` — which to run
+### Services — which to run
 
 Toggle each service on or off. A disabled service stays present in the
 container but sleeps (s6 does not run its `main.py`).
 
-```yaml
-services:
-  voice_gateway: true
-  notify_gateway: true
-  telegram_bot: true
-```
+| Key | Default |
+|-----|---------|
+| `enable_voice_gateway` | `true` |
+| `enable_notify_gateway` | `true` |
+| `enable_telegram_bot` | `true` |
 
-### `telegram`
+### Telegram
 
-```yaml
-telegram:
-  bot_token: "<from @BotFather>"
-  chat_id: 123456789
-```
+| Key | Notes |
+|-----|-------|
+| `telegram_bot_token` | From @BotFather. Required when `enable_telegram_bot` is on. |
+| `telegram_chat_id` | Your numeric Telegram user ID — the bot only answers to this ID. |
 
-`chat_id` is the numeric ID the bot is allowed to talk to (your account).
-Required when `services.telegram_bot` or
-`voice_gateway.telegram_push` is true.
+### Home Assistant
 
-### `home_assistant`
+| Key | Default | Notes |
+|-----|---------|-------|
+| `ha_url` | `http://supervisor/core` | Default works inside the add-on. |
+| `ha_token` | _(empty)_ | Blank = use the auto-injected SUPERVISOR_TOKEN. |
+| `ha_service_timeout` | `15` | Seconds. |
+| `ha_dry_run` | `false` | When on, service calls are only logged — no real HA actions are executed. |
 
-```yaml
-home_assistant:
-  url: "http://supervisor/core"   # default — uses the Supervisor proxy
-  token: ""                       # blank = use the auto-injected SUPERVISOR_TOKEN
-  service_timeout: 15
-  dry_run: false                  # true = no real service calls, just log; state reads stay live
-```
+`ha_dry_run` is useful while tuning prompts (so a misfire doesn't unlock the front door). It only blocks `call_service` — `get_state` and bulk state reads stay live.
 
-`dry_run` is useful for two things: a safety net while you tinker with the
-LLM prompts (so a misfire doesn't unlock the front door), and the local
-end-to-end test pipeline under `tests/e2e/`. It only blocks `call_service`
-calls — `get_state` and bulk state reads still see real data, so status
-queries continue to work.
+### Whisper (STT)
 
-Leaving `token` blank makes the add-on use `SUPERVISOR_TOKEN`, which already
-has the permissions the gateway needs. Override it with a long-lived
-access token if you want to call HA from a different host.
+| Key | Default | Notes |
+|-----|---------|-------|
+| `whisper_url` | _(empty)_ | OpenAI-compatible `/v1/audio/transcriptions` endpoint. Required for voice input. |
+| `whisper_model` | `deepdml/faster-whisper-large-v3-turbo-ct2` | Model name sent to the server. |
 
-### `whisper`
+Point `whisper_url` at any compatible STT server. The repo's `infra/faster_whisper/docker-compose.yml` ships a ready-to-use setup.
 
-External Whisper only in v1.0:
+### LM Studio
 
-```yaml
-whisper:
-  external_url: "http://10.1.10.78:10300/v1/audio/transcriptions"
-  external_model: "deepdml/faster-whisper-large-v3-turbo-ct2"
-  language: "de"
-```
+| Key | Default | Notes |
+|-----|---------|-------|
+| `lmstudio_url` | _(empty)_ | Required when voice gateway or Telegram bot is enabled. |
+| `lmstudio_model` | `qwen2.5-7b-instruct` | Must be loaded in LM Studio. |
+| `lmstudio_api_key` | _(empty)_ | Leave empty if the server has no auth. |
+| `lmstudio_timeout` | `30` | Seconds. |
+| `lmstudio_temperature` | `0.1` | 0.0–0.3 recommended. |
+| `lmstudio_no_think` | `true` | Suppresses `<think>` blocks on reasoning models. |
+| `lmstudio_context_length` | `8000` | Context window for MCP fallback (mode 2). |
+| `lmstudio_mcp_allowed_tools` | _(see example)_ | Comma-separated whitelist for fallback mode 2. Empty = allow all. |
+| `lmstudio_max_actions_per_command` | `0` | 0 = unlimited. |
 
-Point `external_url` at any OpenAI-compatible `/v1/audio/transcriptions`
-server. The repo's `infra/faster_whisper/docker-compose.yml`
-ships a working setup.
+These values are also reused as defaults by the preprocessor and RAG when those leave their own URL / model / API key blank.
 
-### `lmstudio`
+### Voice Gateway / Notify Gateway
 
-```yaml
-lmstudio:
-  url: "http://10.1.10.78:1234"
-  model: "qwen2.5-7b-instruct"
-  api_key: ""
-  timeout: 30
-  temperature: 0.1
-  no_think: true
-  context_length: 8000
-  mcp_allowed_tools: "HassTurnOn,HassTurnOff,..."   # comma-separated
-  max_actions_per_command: 0                        # 0 = unlimited
-```
+| Key | Default | Notes |
+|-----|---------|-------|
+| `voice_port` | `8765` | Change the Network section too if you override this. |
+| `voice_api_key` | _(empty)_ | X-Api-Key header expected from clients; empty = no auth. |
+| `voice_telegram_push` | `true` | Forward voice replies to Telegram (requires Telegram bot enabled). |
+| `voice_reply_with_transcript` | `true` | Include the transcript in the Telegram receipt. |
+| `notify_port` | `8766` | |
+| `notify_http_timeout` | `10` | Seconds. |
 
-`mcp_allowed_tools` is the whitelist used in `FALLBACK_MODE=2`. Empty = no
-filter (all tools the HA MCP server exposes are allowed).
+### TTS
 
-The values in this section are also reused as defaults by `llm_preprocessor`
-and `rag` when those leave their `url` / `model` / `api_key` blank.
+| Key | Default | Notes |
+|-----|---------|-------|
+| `tts_url` | _(empty)_ | External TTS server. Leave empty — voice gateway returns JSON instead of audio. |
+| `tts_voice` | `de_DE-thorsten-low` | Voice ID sent to the TTS server. |
 
-### `voice_gateway` / `notify_gateway`
+### RAG
 
-```yaml
-voice_gateway:
-  port: 8765
-  api_key: ""               # X-Api-Key header expected from clients; empty = no auth
-  telegram_push: true
-  reply_with_transcript: true
-notify_gateway:
-  port: 8766
-  http_timeout: 10
-```
+| Key | Default | Notes |
+|-----|---------|-------|
+| `rag_enabled` | `true` | Use vector retrieval instead of `entities.yaml` keyword lookup. |
+| `rag_top_k` | `15` | Max candidates per query. |
+| `rag_distance_threshold` | `0.0` | 0 = off. Drops candidates above this distance (best candidate always kept). |
+| `rag_keyword_boost` | `0.3` | 0 = pure vector; higher = stronger keyword preference. |
+| `rag_embed_url` | _(empty)_ | Leave empty to reuse `lmstudio_url`. |
+| `rag_embed_model` | `text-embedding-nomic-embed-text-v2-moe` | |
+| `rag_embed_dim` | `768` | Must match the embedding model. Index rebuilds automatically when changed. |
 
-If you change `port`, also change the **Network** section in the add-on UI to
-expose the new port to the host.
-
-### `tts`
-
-```yaml
-tts:
-  external_url: "http://10.1.10.78:10400/tts"
-  external_voice: "de_DE-thorsten-low"
-```
-
-Leave `external_url` blank to skip TTS — voice_gateway returns JSON instead
-of audio.
-
-### `rag`
-
-```yaml
-rag:
-  enabled: true
-  top_k: 15
-  distance_threshold: 0.0   # 0 = aus; example ~0.5 for nomic-embed-text-v2
-  keyword_boost: 0.3
-  embed_url: ""        # blank = reuse lmstudio.url
-  embed_model: "text-embedding-nomic-embed-text-v2-moe"
-  embed_dim: 768
-```
-
-`distance_threshold` drops candidates whose embedding distance is above the
-value (the best candidate is always kept as a safety net). `top_k` remains a
+`rag_distance_threshold` drops candidates whose embedding distance is above the
+value (the best candidate is always kept as a safety net). `rag_top_k` remains a
 hard upper bound; the stricter of the two limits wins. With `0` (default)
-only `top_k` applies - identical to previous behaviour. To tune: trigger a
-`/rag_rebuild`, send a voice command, look at the `Top-5: [(eid, dist), ...]`
-log line and pick a threshold slightly above the typical correct-hit
-distance.
+only `rag_top_k` applies. To tune: trigger a `/rag_rebuild`, send a voice
+command, look at the `Top-5: [(eid, dist), ...]` log line and pick a threshold
+slightly above the typical correct-hit distance.
 
 The SQLite vector index lives at `/data/rag/entities.sqlite`. Trigger a
 rebuild from Telegram with `/rag_rebuild`, from a terminal with
@@ -280,7 +226,7 @@ Assistant (see below).
 
 Add the following blocks to your `configuration.yaml`. Replace
 `<your gateway api key>` with the value you set in
-`voice_gateway.api_key` (or remove the `headers:` block if you left it
+`voice_api_key` (or remove the `headers:` block if you left it
 empty).
 
 ```yaml
@@ -332,68 +278,59 @@ bell menu showing the indexed entity count and timestamp. No manual
 sensor refresh needed — the next automatic poll updates the sensor
 values within 60 s.
 
-### `llm_preprocessor`
+### LLM Preprocessor
 
-```yaml
-llm_preprocessor:
-  enabled: true
-  url: ""              # blank = reuse lmstudio.url
-  api_key: ""          # blank = reuse lmstudio.api_key
-  model: ""            # blank = reuse lmstudio.model
-  timeout: 30
-  temperature: 0.1
-```
+| Key | Default | Notes |
+|-----|---------|-------|
+| `preprocessor_enabled` | `true` | Extra LLM call that classifies intent, fixes typos/STT errors, and resolves pronouns before the main pipeline. |
+| `preprocessor_url` | _(empty)_ | Leave empty to reuse `lmstudio_url`. |
+| `preprocessor_api_key` | _(empty)_ | Leave empty to reuse `lmstudio_api_key`. |
+| `preprocessor_model` | _(empty)_ | Leave empty to reuse `lmstudio_model`. A small fast model is recommended. |
+| `preprocessor_timeout` | `30` | Seconds. |
+| `preprocessor_temperature` | `0.1` | |
 
-When enabled, an extra small LLM call classifies intent
-(`command | smalltalk`), fixes typos / STT errors, and resolves pronouns from
-history before the main pipeline runs.
+### Fallback
 
-### `fallback`
+| Key | Default | Notes |
+|-----|---------|-------|
+| `fallback_mode` | `0` | 0 = off, 1 = REST (live HA states + retry parser), 2 = MCP (LM Studio + HA MCP tools). |
+| `fallback_rest_max_entities` | `0` | 0 = no limit. Used by mode 1 to keep the prompt small. |
+| `fallback_rest_domains` | `light,switch,...` | Comma-separated HA domains included in mode-1 fallback. |
 
-```yaml
-fallback:
-  mode: 0                          # 0=off, 1=REST, 2=MCP
-  rest_max_entities: 0             # 0 = no limit
-  rest_domains: "light,switch,sensor,binary_sensor,climate,automation,cover"
-```
+### History
 
-### `history`
-
-```yaml
-history:
-  size: 0                       # 0 = no history; each request is independent
-  include_assistant: true       # let the LLM see its own past replies
-  append_executions: false      # add "executed: ..." lines so follow-ups have context
-```
+| Key | Default | Notes |
+|-----|---------|-------|
+| `history_size` | `0` | 0 = disabled. How many past user turns the LLM sees per chat. |
+| `history_include_assistant` | `true` | Let the LLM see its own past replies. |
+| `history_append_executions` | `false` | Append executed actions to history so follow-ups like "did it work?" have context. |
 
 ### Required fields
 
 Nothing is required globally — every "required" field depends on which
-services you enable. The HA UI cannot express conditional requirements, so
-the affected field labels say "required if X is enabled", and the add-on
-validates on startup and refuses to start when something essential is
-missing:
+services you enable. The add-on validates on startup and refuses to start
+when something essential is missing:
 
 | Field | Required when |
 |-------|---------------|
-| `telegram.bot_token` | `services.telegram_bot` is on |
-| `telegram.chat_id` (≠ 0) | `services.telegram_bot` is on |
-| `lmstudio.url` | `services.voice_gateway` or `services.telegram_bot` is on |
+| `telegram_bot_token` | `enable_telegram_bot` is on |
+| `telegram_chat_id` (≠ 0) | `enable_telegram_bot` is on |
+| `lmstudio_url` | `enable_voice_gateway` or `enable_telegram_bot` is on |
 
-Pure example: if you only use `notify_gateway` (HA → TTS / Telegram fan-out
+Pure example: if you only use `enable_notify_gateway` (HA → TTS / Telegram fan-out
 without LLM commands), all three are optional.
 
 Strongly recommended (warning only — feature degrades gracefully):
 
 | Field | Effect when missing |
 |-------|---------------------|
-| `whisper.external_url` | Voice input (audio uploads, Telegram voice messages) unavailable; text still works |
-| `home_assistant.token` | Falls back to the supervisor token — only needed for external HA instances |
+| `whisper_url` | Voice input (audio uploads, Telegram voice messages) unavailable; text still works |
+| `ha_token` | Falls back to the supervisor token — only needed for external HA instances |
 
 Auto-fallbacks (no warning):
 
-- `rag.embed_url` empty → reuses `lmstudio.url`
-- `llm_preprocessor.url` / `model` / `api_key` empty → reuses corresponding `lmstudio.*`
+- `rag_embed_url` empty → reuses `lmstudio_url`
+- `preprocessor_url` / `preprocessor_model` / `preprocessor_api_key` empty → reuses corresponding `lmstudio_*`
 
 ---
 
@@ -451,14 +388,12 @@ Everything under `/data/` survives add-on restarts and updates.
 
 ## Troubleshooting
 
-- **"telegram_bot enabled but telegram.bot_token is empty"** — fill in
-  `telegram.bot_token` and restart the add-on.
-- **`HA_TOKEN` errors / 401 from HA** — leave `home_assistant.token` blank to
+- **"telegram_bot enabled but telegram_bot_token is empty"** — fill in
+  `telegram_bot_token` and restart the add-on.
+- **`HA_TOKEN` errors / 401 from HA** — leave `ha_token` blank to
   fall back to `SUPERVISOR_TOKEN`, or paste a long-lived access token.
-- **`faster-whisper` import errors** — should never happen; v1.0 hard-pins
-  `WHISPER_BACKEND=external`. If you see this, file an issue with logs.
-- **Image build slow on Pi** — first build can take 10–15 min on armv7 / aarch64.
-  Subsequent rebuilds reuse Docker layer cache.
+- **Whisper returns empty transcripts** — check that `whisper_url` points at a
+  running server and that the `language` setting matches your speech.
 
 ## Local development
 
