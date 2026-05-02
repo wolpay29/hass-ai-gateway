@@ -1,7 +1,7 @@
 #!/command/with-contenv bashio
 set -e
 
-if ! bashio::config.true 'enable_voice_gateway'; then
+if ! bashio::config.true 'services.voice_gateway'; then
     bashio::log.info "[voice-gateway] disabled in config — sleeping"
     exec sleep infinity
 fi

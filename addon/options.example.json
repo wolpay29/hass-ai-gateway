@@ -1,61 +1,80 @@
 {
   "language": "de",
-  "enable_voice_gateway": true,
-  "enable_notify_gateway": true,
-  "enable_telegram_bot": true,
 
-  "telegram_bot_token": "REPLACE_ME",
-  "telegram_chat_id": 123456789,
+  "services": {
+    "voice_gateway": true,
+    "notify_gateway": true,
+    "telegram_bot": true
+  },
 
-  "ha_url": "http://supervisor/core",
-  "ha_token": "",
-  "ha_service_timeout": 15,
-  "ha_dry_run": false,
+  "telegram": {
+    "bot_token": "REPLACE_ME",
+    "chat_id": 123456789
+  },
 
-  "whisper_url": "http://192.168.1.10:10300/v1/audio/transcriptions",
-  "whisper_model": "deepdml/faster-whisper-large-v3-turbo-ct2",
+  "home_assistant": {
+    "url": "http://supervisor/core",
+    "token": "",
+    "service_timeout": 15,
+    "dry_run": false
+  },
 
-  "lmstudio_url": "http://192.168.1.10:1234",
-  "lmstudio_model": "qwen2.5-7b-instruct",
-  "lmstudio_api_key": "",
-  "lmstudio_timeout": 30,
-  "lmstudio_temperature": 0.1,
-  "lmstudio_no_think": true,
-  "lmstudio_context_length": 8000,
-  "lmstudio_mcp_allowed_tools": "HassTurnOn,HassTurnOff,HassCancelAllTimers,HassBroadcast,HassClimateSetTemperature,HassLightSet,GetDateTime,GetLiveContext",
-  "lmstudio_max_actions_per_command": 0,
+  "lmstudio": {
+    "url": "http://192.168.1.10:1234",
+    "model": "qwen2.5-7b-instruct",
+    "api_key": "",
+    "timeout": 30,
+    "temperature": 0.1,
+    "no_think": true,
+    "context_length": 8000,
+    "mcp_allowed_tools": "HassTurnOn,HassTurnOff,HassCancelAllTimers,HassBroadcast,HassClimateSetTemperature,HassLightSet,GetDateTime,GetLiveContext",
+    "max_actions_per_command": 0
+  },
 
-  "voice_port": 8765,
-  "voice_api_key": "",
-  "voice_telegram_push": true,
-  "voice_reply_with_transcript": true,
+  "whisper": {
+    "url": "http://192.168.1.10:10300/v1/audio/transcriptions",
+    "model": "deepdml/faster-whisper-large-v3-turbo-ct2"
+  },
 
-  "notify_port": 8766,
-  "notify_http_timeout": 10,
+  "tts": {
+    "url": "http://192.168.1.10:10400/tts",
+    "voice": "de_DE-thorsten-low"
+  },
 
-  "tts_url": "http://192.168.1.10:10400/tts",
-  "tts_voice": "de_DE-thorsten-low",
+  "gateways": {
+    "voice_port": 8765,
+    "voice_api_key": "",
+    "voice_telegram_push": true,
+    "voice_reply_with_transcript": true,
+    "notify_port": 8766,
+    "notify_http_timeout": 10
+  },
 
-  "rag_enabled": true,
-  "rag_top_k": 15,
-  "rag_distance_threshold": 0.0,
-  "rag_keyword_boost": 0.3,
-  "rag_embed_url": "",
-  "rag_embed_model": "text-embedding-nomic-embed-text-v2-moe",
-  "rag_embed_dim": 768,
+  "rag": {
+    "enabled": true,
+    "top_k": 15,
+    "distance_threshold": 0.0,
+    "keyword_boost": 0.3,
+    "embed_url": "",
+    "embed_model": "text-embedding-nomic-embed-text-v2-moe",
+    "embed_dim": 768
+  },
 
-  "preprocessor_enabled": true,
-  "preprocessor_url": "",
-  "preprocessor_api_key": "",
-  "preprocessor_model": "",
-  "preprocessor_timeout": 30,
-  "preprocessor_temperature": 0.1,
+  "preprocessor": {
+    "enabled": true,
+    "url": "",
+    "api_key": "",
+    "model": "",
+    "timeout": 30,
+    "temperature": 0.1
+  },
 
-  "fallback_mode": 0,
-  "fallback_rest_max_entities": 0,
-  "fallback_rest_domains": "light,switch,sensor,binary_sensor,climate,automation,cover",
-
-  "history_size": 0,
-  "history_include_assistant": true,
-  "history_append_executions": false
+  "advanced": {
+    "fallback_mode": 0,
+    "fallback_rest_max_entities": 0,
+    "fallback_rest_domains": "light,switch,sensor,binary_sensor,climate,automation,cover",
+    "history_size": 0,
+    "history_include_assistant": true,
+    "history_append_executions": false
+  }
 }

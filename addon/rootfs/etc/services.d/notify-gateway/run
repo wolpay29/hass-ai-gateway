@@ -1,7 +1,7 @@
 #!/command/with-contenv bashio
 set -e
 
-if ! bashio::config.true 'enable_notify_gateway'; then
+if ! bashio::config.true 'services.notify_gateway'; then
     bashio::log.info "[notify-gateway] disabled in config — sleeping"
     exec sleep infinity
 fi
