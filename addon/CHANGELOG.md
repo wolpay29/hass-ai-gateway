@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 — 2026-05-03
+
+- Fix: field descriptions now appear above config inputs in HA UI (removed incorrect `fields:` wrapper from translations).
+- Fix: bot token no longer appears in plaintext in addon logs.
+
 ## 1.2.0 — 2026-05-02
 
 - Config UI now has 10 collapsible sections (Services, Telegram, Home Assistant, LM Studio, Whisper, TTS, Gateways, RAG, Preprocessor, Fallback & History).
