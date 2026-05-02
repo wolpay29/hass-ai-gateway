@@ -5,20 +5,22 @@ ENV LANG=C.UTF-8 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/opt/gateway \
-    WHISPER_BACKEND=external
+    WHISPER_BACKEND=external \
+    PIP_BREAK_SYSTEM_PACKAGES=1 \
+    DEBIAN_FRONTEND=noninteractive
 
-# Runtime + build dependencies. Build deps are dropped at end of layer.
-RUN apk add --no-cache \
+# Runtime: Python 3 + ffmpeg. Debian base = glibc, so sqlite-vec wheels work.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+        python3-venv \
         ffmpeg \
         ca-certificates \
         tzdata \
- && apk add --no-cache --virtual .build-deps \
-        gcc \
-        g++ \
-        musl-dev \
-        python3-dev \
-        linux-headers \
-        libffi-dev
+ && rm -rf /var/lib/apt/lists/* \
+ && ln -sf /usr/bin/python3 /usr/local/bin/python \
+ && ln -sf /usr/bin/pip3   /usr/local/bin/pip
 
 WORKDIR /opt/gateway
 
@@ -37,9 +39,7 @@ RUN set -e \
  && grep -v -E '^[[:space:]]*faster-whisper' \
         /opt/gateway/services/telegram_bot/requirements.txt  > /tmp/req-tb.txt \
  && pip install --no-cache-dir --upgrade pip wheel \
- && pip install --no-cache-dir -r /tmp/req-vg.txt -r /tmp/req-ng.txt -r /tmp/req-tb.txt \
- && apk del .build-deps \
- && (find /usr/lib/python3* -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true)
+ && pip install --no-cache-dir -r /tmp/req-vg.txt -r /tmp/req-ng.txt -r /tmp/req-tb.txt
 
 # s6-overlay service definitions + cont-init.
 COPY rootfs/ /
