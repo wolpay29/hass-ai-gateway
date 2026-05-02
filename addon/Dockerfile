@@ -28,17 +28,17 @@ COPY _build/services/voice_gateway/     /opt/gateway/services/voice_gateway/
 COPY _build/services/notify_gateway/    /opt/gateway/services/notify_gateway/
 COPY _build/services/telegram_bot/      /opt/gateway/services/telegram_bot/
 
-# Install Python deps. Filter faster-whisper out of telegram_bot/requirements.txt
-# (external Whisper only for v1.0; saves ~500 MB of torch + ctranslate2).
-RUN pip install --no-cache-dir --upgrade pip wheel \
- && pip install --no-cache-dir \
-        -r /opt/gateway/services/voice_gateway/requirements.txt \
-        -r /opt/gateway/services/notify_gateway/requirements.txt \
+# Install Python deps. faster-whisper/ctranslate2 excluded (WHISPER_BACKEND=external).
+RUN grep -v -E '^[[:space:]]*faster-whisper' \
+        /opt/gateway/services/voice_gateway/requirements.txt  > /tmp/req-vg.txt \
  && grep -v -E '^[[:space:]]*faster-whisper' \
-        /opt/gateway/services/telegram_bot/requirements.txt \
-        | pip install --no-cache-dir -r /dev/stdin \
+        /opt/gateway/services/notify_gateway/requirements.txt > /tmp/req-ng.txt \
+ && grep -v -E '^[[:space:]]*faster-whisper' \
+        /opt/gateway/services/telegram_bot/requirements.txt  > /tmp/req-tb.txt \
+ && pip install --no-cache-dir --upgrade pip wheel \
+ && pip install --no-cache-dir -r /tmp/req-vg.txt -r /tmp/req-ng.txt -r /tmp/req-tb.txt \
  && apk del .build-deps \
- && find /usr/lib/python3* -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+ && find /usr/lib/python3* -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null; true
 
 # s6-overlay service definitions + cont-init.
 COPY rootfs/ /
