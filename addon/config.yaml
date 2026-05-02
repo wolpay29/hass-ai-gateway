@@ -68,6 +68,7 @@ options:
     distance_threshold: 0.0
     keyword_boost: 0.3
     embed_url: ""
+    embed_api_key: ""
     embed_model: "text-embedding-nomic-embed-text-v2-moe"
     embed_dim: 768
   preprocessor:
@@ -128,6 +129,7 @@ schema:
     distance_threshold: float(0,10)
     keyword_boost: float(0,5)
     embed_url: str?
+    embed_api_key: password?
     embed_model: str?
     embed_dim: int(64,8192)
   preprocessor:

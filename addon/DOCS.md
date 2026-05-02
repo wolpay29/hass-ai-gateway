@@ -1,44 +1,154 @@
 # Hass AI Gateway — Documentation
 
-Three services in one container: `voice_gateway` (port 8765), `notify_gateway` (port 8766), `telegram_bot`.
+The idea behind this add-on is to make your Home Assistant installation smart by connecting it to a **local LLM** — no cloud, no subscriptions. You run the language model yourself (e.g. via LM Studio) and this add-on acts as the bridge: it takes your requests, finds the right entities, lets the LLM decide what to do, and executes the actions in HA.
+
+Everything runs locally. Your data stays at home.
+
+The add-on gives you three ways to interact with the LLM and your smart home:
+
+- **Telegram bot** — text or voice commands. The LLM interprets the request, calls the right HA services, and replies. Inline buttons trigger actions directly without LLM.
+- **Voice gateway** — HTTP API for RPi / ESP32. Transcribes audio via Whisper, runs the same pipeline, replies via TTS.
+- **Notify gateway** — HA posts notifications here; fans them out to Telegram and/or TTS speakers.
 
 ---
 
-## User-editable files
+## Tested hardware
 
-Editable via **File Editor** or **Samba** at `/addon_configs/<slug>/`. Defaults are seeded on first start.
+The full stack (LM Studio + Whisper + TTS + embedding) was tested on a single machine:
 
-| File | Purpose |
-|------|---------|
-| `userconfig/entities.yaml` | Entity catalogue for the parser and RAG index |
-| `userconfig/entities_blacklist.yaml` | Entity-id patterns excluded from RAG |
-| `userconfig/pre_llm_memory.md` | Hints injected before RAG (typo fixes, pronoun rules) |
-| `userconfig/post_llm_memory.md` | Hints injected into every parser prompt |
-| `menus.yaml` | Telegram bot menus and button actions |
+- **RTX 2080 Ti (11 GB VRAM)** — runs Gemma 4 e4b it (chat model) + nomic-embed-text-v2-moe (embedding) + faster-whisper large-v3-turbo simultaneously. Context length 8192. Response speed is good even with RAG + Preprocessor enabled.
+- **RTX 3090 (24 GB VRAM)** — same stack, noticeably faster responses and more headroom for larger models or longer context.
 
-After editing `entities.yaml`: send `/rag_rebuild` in Telegram or `POST /rag_rebuild` to the voice gateway.
-After editing other files: restart the add-on.
+All three infra services (LM Studio, Whisper, TTS) should ideally run on the same GPU machine to avoid network overhead and share VRAM scheduling.
 
-### entities.yaml
+---
+
+## Infrastructure
+
+The add-on itself only needs LM Studio. Whisper and TTS run as separate Docker containers — ready-to-use setups are included in `infra/`:
+
+- **`infra/faster_whisper/`** — Whisper STT server. `docker-compose up -d` is all it takes.
+- **`infra/tts_server/`** — TTS server. Same: `docker-compose up -d`.
+
+**Recommended:** run both on the same machine as LM Studio so they share the GPU. The add-on then just needs the IP of that machine.
+
+For the **Raspberry Pi** voice client, an install script is available:
+
+```bash
+cd clients/raspberry_pi
+bash install.sh
+```
+
+It installs all dependencies and sets up the client. Configure the gateway URL and API key in `clients/raspberry_pi/.env`.
+
+---
+
+## Installation
+
+1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories**, add `https://github.com/wolpay29/hass-ai-gateway`.
+2. Install **Hass AI Gateway** and open the **Configuration** tab.
+3. Fill in at minimum:
+   - `telegram` → `bot_token` (from @BotFather), `chat_id` (your numeric Telegram user ID)
+   - `lmstudio` → `url` (e.g. `http://192.168.1.10:1234`)
+   - `whisper` → `url` (e.g. `http://192.168.1.10:10300/v1/audio/transcriptions`) — leave empty for text-only use
+4. **Start** the add-on.
+
+---
+
+## How to configure — pick your setup
+
+- **RAG off** — define devices in `entities.yaml`. The full list with live states is sent to the LLM on every request. Good for small, fixed setups.
+- **RAG on** — all HA entities are indexed in a vector DB. Each request finds the most relevant ones automatically. Add keywords/metadata in `entities.yaml` to improve results.
+- **RAG + Preprocessor on** — a small extra LLM call rewrites the request using conversation history before the vector search. Best for vague or follow-up commands.
+- **History on** — passes previous turns to the LLM so follow-ups work in context ("turn it off again", "and the kitchen too").
+
+**Fallback mode** _(beta — not well tested yet)_ — what happens when no matching entity is found:
+
+- **Mode 0 (default)** — returns an error.
+- **Mode 1** — fetches all live HA states and retries with the full list. Works but can produce large prompts.
+- **Mode 2** — hands off to LM Studio with the HA MCP server. Requires LM Studio auth and a running HA MCP server.
+
+---
+
+## Configuration
+
+**Required fields** — the add-on refuses to start if these are missing:
+
+- `telegram.bot_token` — required when `services.telegram_bot` is on
+- `telegram.chat_id` (≠ 0) — required when `services.telegram_bot` is on
+- `lmstudio.url` — required when `services.voice_gateway` or `services.telegram_bot` is on
+
+**Auto-fallbacks** — leave these blank to inherit from LM Studio:
+
+- `ha_token` → uses the auto-injected supervisor token
+- `whisper.url` → voice input disabled, text commands still work
+- `rag.embed_url` → reuses `lmstudio.url`
+- `preprocessor.url/model/api_key` → reuses the corresponding `lmstudio.*` value
+
+---
+
+## entities.yaml
+
+Edit via **File Editor** or **Samba** at `/addon_configs/<slug>/userconfig/entities.yaml`.
+
+This file serves two purposes:
+- **RAG off** — the entire list is passed to the LLM on every request.
+- **RAG on** — entries enrich the auto-indexed HA entities with better keywords, metadata, and restricted actions.
+
+### What flows into the RAG vector index (embed text)
+
+When RAG indexes an entity, it builds an embed text from: entity ID, friendly name, area, domain, description, and keywords. The richer this text, the better the vector search finds it. Entries in `entities.yaml` extend or override what HA provides.
+
+### What the LLM sees when an entity is retrieved (metadata)
+
+After the vector search, the LLM receives for each matched entity: friendly name, area, current state + attributes, available actions, and the `meta` field. The `meta` field is free text — use it to give the LLM extra context it wouldn't have from state alone (conditions, rules, unit explanations).
+
+### Actions
+
+If you define `actions` in `entities.yaml`, they **replace** the default HA actions for that entity. This lets you restrict what the LLM can do (e.g. allow only `turn_on`/`turn_off`, not `toggle`) or add custom actions. If you leave `actions` empty, the full set of HA actions is available.
+
+### Examples
 
 ```yaml
 entities:
-  - id: light.living_room
-    description: "Living room light"
-    keywords: ["living room", "lounge"]
-    actions: ["turn_on", "turn_off", "toggle"]
-    domain: light
+  # Simple switch
+  - id: switch.garden_pump
+    description: "Garden irrigation pump"
+    keywords: ["pump", "irrigation", "garden water"]
+    actions: ["turn_on", "turn_off"]
+    domain: switch
+    meta: "Only turn on when weather is dry. Maximum 30 minutes runtime."
+
+  # Sensor (read-only — no actions)
+  - id: sensor.plug_jbl_power
+    description: "JBL speaker power consumption"
+    keywords: ["JBL", "speaker", "power"]
+    actions: []
+    domain: sensor
+    meta: "Above 5 W = playing. Below 1 W = standby."
+
+  # Button
+  - id: button.front_door_bell
+    description: "Front door bell trigger"
+    keywords: ["doorbell", "ring", "front door"]
+    actions: ["press"]
+    domain: button
     meta: ""
 
-  - id: climate.living_room
-    description: "Living room thermostat"
-    keywords: ["living room heating", "thermostat"]
-    actions: ["set_temperature", "set_hvac_mode"]
-    domain: climate
-    meta: ""
+  # Automation — restrict to trigger only
+  - id: automation.good_night
+    description: "Good night routine"
+    keywords: ["good night", "sleep", "night mode"]
+    actions: ["trigger"]
+    domain: automation
+    meta: "Turns off all lights and locks the front door."
 ```
 
-### entities_blacklist.yaml
+---
+
+## entities_blacklist.yaml
+
+Entities matching these patterns are excluded from the RAG index and never shown to the LLM. Accepts exact IDs or globs.
 
 ```yaml
 blacklist:
@@ -47,43 +157,36 @@ blacklist:
   - automation.test_*
 ```
 
-### pre_llm_memory.md / post_llm_memory.md
+---
 
-Free-text Markdown. Content inside `<!-- ... -->` is ignored.
+## Memory files
 
-- **pre** — injected before RAG (query rewriter). Use for STT corrections and pronoun rules.
-- **post** — appended to every parser prompt. Use for preferences and never-do rules.
+Edit via **File Editor** or **Samba** at `/addon_configs/<slug>/userconfig/`.
+
+- **`pre_llm_memory.md`** — injected before the RAG search (query rewriter). Use for recurring STT corrections and pronoun rules.
+- **`post_llm_memory.md`** — appended to every parser prompt. Use for preferences and never-do rules.
+
+Content inside `<!-- ... -->` is ignored by the gateway.
+
+```markdown
+## STT corrections
+- "livingroom" → living room
+- "pump" without context → garden pump
+
+## Rules
+- Never trigger automation.vacation_mode without asking first.
+- If user says "all off", prefer group entities.
+```
+
+After editing: restart the add-on.
 
 ---
 
-## Configuration
+## RAG index
 
-Settings are grouped into collapsible sections in the HA UI.
+Trigger a rebuild after changing `entities.yaml`: send `/rag_rebuild` in Telegram or `POST /rag_rebuild` to the voice gateway.
 
-### Required fields
-
-The add-on validates on startup and refuses to start if required fields are missing.
-
-| Field | Required when |
-|-------|---------------|
-| `telegram.bot_token` | `services.telegram_bot` on |
-| `telegram.chat_id` (≠ 0) | `services.telegram_bot` on |
-| `lmstudio.url` | `services.voice_gateway` or `services.telegram_bot` on |
-
-Blank `ha_token` → uses the auto-injected supervisor token (correct for most setups).
-Blank `whisper.url` → voice input disabled, text commands still work.
-Blank `rag.embed_url` → reuses `lmstudio.url`.
-Blank `preprocessor.url/model/api_key` → reuses the corresponding `lmstudio.*` value.
-
-### RAG
-
-After a config change or entity update: trigger a rebuild via `/rag_rebuild` in Telegram or `POST /rag_rebuild` on the voice gateway.
-
-The index lives at `/data/rag/entities.sqlite`.
-
-#### RAG status + rebuild button in HA
-
-Add to `configuration.yaml` (remove `headers:` if `voice_api_key` is empty):
+**Status sensor + rebuild button in HA** — add to `configuration.yaml` (remove `headers:` if `voice_api_key` is empty):
 
 ```yaml
 rest:
@@ -128,9 +231,9 @@ entities:
 
 ---
 
-## Calling the gateways from HA
+## Examples
 
-### notify_gateway
+### Doorbell announcement (notify_gateway → TTS + Telegram)
 
 ```yaml
 # configuration.yaml
@@ -141,19 +244,67 @@ rest_command:
     content_type: "application/json"
     payload: >-
       {"message": "{{ message }}",
-       "targets": [{"type": "telegram"},
-                   {"type": "tts", "url": "http://192.168.1.50:8765"}]}
+       "targets": [{"type": "telegram"}, {"type": "tts"}]}
 ```
 
-### voice_gateway — text command
+```yaml
+# automation
+- alias: Doorbell
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.doorbell
+      to: "on"
+  action:
+    - service: rest_command.notify_assistant
+      data:
+        message: "Jemand klingelt an der Tür."
+```
+
+### Send a text command from an HA automation
 
 ```yaml
+# configuration.yaml
 rest_command:
-  voice_gateway_text:
+  voice_command:
     url: "http://localhost:8765/text"
     method: POST
     content_type: "application/json"
     payload: '{"text": "{{ text }}", "device_id": "ha"}'
+```
+
+```yaml
+# automation
+- alias: Leaving home
+  trigger:
+    - platform: state
+      entity_id: person.paul
+      to: "not_home"
+  action:
+    - service: rest_command.voice_command
+      data:
+        text: "Turn off all lights and the TV"
+```
+
+### Telegram quick-action button (menus.yaml)
+
+Inline buttons bypass the LLM — instant and reliable for frequently used actions.
+
+```yaml
+menus:
+  - name: "Lights"
+    buttons:
+      - label: "💡 Living room on"
+        action:
+          domain: light
+          service: turn_on
+          entity_id: light.living_room
+        response: "Living room light on."
+      - label: "🌙 All lights off"
+        action:
+          domain: light
+          service: turn_off
+          entity_id: light.all
+        response: "All lights off."
 ```
 
 ---

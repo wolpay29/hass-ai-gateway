@@ -56,6 +56,7 @@
     "distance_threshold": 0.0,
     "keyword_boost": 0.3,
     "embed_url": "",
+    "embed_api_key": "",
     "embed_model": "text-embedding-nomic-embed-text-v2-moe",
     "embed_dim": 768
   },

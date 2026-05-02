@@ -1,6 +1,4 @@
-# Smart Home Assistant — Architecture & Workflow
-
-> This file supersedes `ARCHITECTURE.md` and `WORKFLOW.md`.
+# Architecture & Workflow
 
 A single brain (`core.processor.process_transcript`) is shared by all entry points — Telegram bot, voice gateway (Raspberry Pi / ESP32), and direct HTTP — so LLM, RAG, fallback, and history behaviour is identical regardless of how the request arrives.
 
@@ -254,8 +252,13 @@ This path **never touches `core.processor`**.
 
 The `chat_id` controls **conversation history**:
 
-- Telegram: real chat ID.
-- Gateway: `_device_to_chat_id(device_id)` — numeric IDs are reused (an RPi using the owner's Telegram chat ID *shares history* with Telegram); other strings hash into an isolated bucket.
+| Caller | `chat_id` used |
+|--------|----------------|
+| Telegram | `update.effective_chat.id` (real Telegram chat ID) |
+| Gateway, numeric `device_id` | parsed directly as `int(device_id)` — shares history with Telegram if equal |
+| Gateway, string `device_id` | `abs(hash(device_id)) % 10**9` — isolated bucket per device name |
+
+Set the RPi's `DEVICE_ID` to your Telegram chat ID to share one conversation across both channels. Leave it as `rpi-kitchen` for an isolated history space.
 
 ### 4.3 Speech-to-text (voice only)
 
@@ -473,20 +476,30 @@ Renderers:
 
 ## 8. Running the services
 
-### Telegram bot
+### HA Supervisor add-on (recommended)
+
+Add the repo URL to the HA Add-on Store, install **Hass AI Gateway**, fill in options, hit Start. Config is injected via `addon/rootfs/usr/lib/hass-ai-gateway/export-env.sh` — no `.env` needed inside the container.
+
+### Bare-metal / systemd
+
 ```bash
-cd services/telegram_bot
-python main.py
+sudo deploy/systemd/install.sh
 ```
 
-### Voice gateway
+Creates a venv per service under `services/<svc>/<svc>_env/`, copies `.service` units to `/etc/systemd/system/`, and enables them. Assumes the repo lives at `/root/hass-ai-gateway/`. Requires a `.env` file in the repo root (see `.env.example`).
+
+### Manual (development)
+
 ```bash
-cd services/voice_gateway
-pip install -r requirements.txt
-python main.py   # listens on 0.0.0.0:8765
+# Telegram bot
+cd services/telegram_bot && python main.py
+
+# Voice gateway
+cd services/voice_gateway && python main.py   # 0.0.0.0:8765
 ```
 
 ### Raspberry Pi client
+
 ```bash
 cd clients/raspberry_pi
 sudo apt install -y portaudio19-dev espeak espeak-data libespeak-dev
@@ -498,9 +511,14 @@ export WAKE_WORD="hey_jarvis"
 python voice_client.py
 ```
 
-### History sharing between Telegram and RPi
+### Gateway-specific env vars
 
-Set the RPi's `DEVICE_ID` to your Telegram chat ID (e.g. `DEVICE_ID=123456789`). Both channels then share one conversation. Leave it as a name like `rpi-kitchen` for an isolated history space.
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `GATEWAY_API_KEY` | _(empty)_ | Require `X-Api-Key` header. Empty = no auth. |
+| `GATEWAY_PORT` | `8765` | Port to listen on. |
+| `GATEWAY_TELEGRAM_PUSH` | `true` | Send a receipt of each gateway command to `MY_CHAT_ID`. |
+| `DOTENV_PATH` | _(auto)_ | Override the `.env` location. |
 
 ---
 
