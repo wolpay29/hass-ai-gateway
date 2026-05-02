@@ -23,6 +23,9 @@ for _candidate in _env_candidates:
 else:
     load_dotenv()
 
+# UI language and LLM prompt language. "de" or "en".
+LANGUAGE = os.getenv("LANGUAGE", "de").lower()
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MY_CHAT_ID = int(os.getenv("MY_CHAT_ID", "0"))
 

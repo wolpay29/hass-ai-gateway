@@ -46,6 +46,29 @@ single_cases:
       no_actions: true
       reply_regex: '\d'
 
+  # --------------------------- LANGUAGE=en Smoke-Tests --------------------------
+  # Cases mit `language: en` laufen nur auf Run-Varianten mit LANGUAGE=en
+  # (siehe matrix.yaml: lang-en). Cases ohne language-Feld zaehlen als "de" und
+  # laufen nicht auf englischen Varianten.
+  - id: en_smoke_status_pv
+    description: "EN: PV status by text — checks pipeline runs and replies in English"
+    language: en
+    text: "How much power is the photovoltaic system producing right now?"
+    tts: false
+    expect:
+      no_actions: true
+      reply_regex: '\d'
+      no_error: true
+
+  - id: en_smoke_action_light_paul
+    description: "EN: turn on Paul's light — checks action routing under LANGUAGE=en"
+    language: en
+    text: "Turn on the light at Paul's"
+    tts: false
+    expect:
+      action_includes: [{ entity_id: light.licht_paul, action: turn_on }]
+      no_error: true
+
   # --------------------------- Statusabfragen --------------------------
   - id: status_pv
     description: "PV-Leistung abfragen - Sensor in yaml, Wert kommt aus pre-fetched state"
@@ -288,3 +311,4 @@ sequence_cases:
       - audio: action_tor_auto.wav
         expect:
           action_includes: [{ entity_id: automation.trigger_tor_auto, action: trigger }]
+

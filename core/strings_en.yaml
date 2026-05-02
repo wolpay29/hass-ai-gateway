@@ -1,0 +1,55 @@
+# English UI strings and LLM prompt fragments.
+# Loaded via core/strings.py when LANGUAGE=en.
+
+# --- Telegram bot: handlers.py ---
+error_parse_failed: "❓ I could not process your request."
+error_fallback_no_match: "❓ No matching device found (REST fallback returned no result)."
+error_needs_fallback_no_mode: "❓ This action requires parameters (e.g. temperature, position) that cannot be handled here. Enable FALLBACK_MODE=2 for MCP support."
+error_no_match: "❓ No matching device found."
+error_mcp_failed: "❓ MCP fallback failed."
+error_default: "❓ No matching device found."
+
+status_transcribing: "🎙️ Transcribing..."
+status_no_speech: "❌ Voice message not understood."
+status_recognized: "📝 Recognised: {text}"
+status_analysing_command: "🤖 Analysing command..."
+status_analysing: "🤖 Analysing..."
+status_rag_disabled: "⚠️ RAG_ENABLED is not active."
+status_rag_rebuilding: "🔄 Starting RAG index rebuild ..."
+status_rag_ready: "✅ RAG index ready\nEntities: {count}\nLast indexed: {last}"
+status_rag_failed: "❌ Rebuild failed: {error}"
+
+ignored_by_limit: "⚠️ *Ignored by limit ({limit}):*"
+reply_chat_prefix: "💬 {reply}"
+
+# --- Telegram bot: menu.py / callbacks.py ---
+main_menu_header: "🏠 Main menu – choose an option:"
+startup_message: "🏠 Bot started – main menu activated."
+use_menu_buttons: "Please use the buttons in the main menu."
+unknown_action: "❌ Unknown action."
+executed: "✅ Done."
+back_button: "⬅️ Back"
+
+# --- Voice gateway: main.py ---
+tts_not_understood: "Sorry, I did not understand you."
+tts_error_prefix: "Error: {error}"
+notify_rag_done_title: "RAG rebuild finished"
+notify_rag_done_msg: "{count} entities indexed\nLast: {last}"
+notify_rag_failed_title: "RAG rebuild failed"
+
+# --- LLM prompt fragments (internal — appended to system prompts) ---
+prompt_memory_header: "# Additional notes / common mistakes"
+history_user_label: "User:"
+history_assistant_label: "Assistant:"
+history_empty: "(empty)"
+exec_summary_marker: "executed:"
+exec_status_ok: "[OK]"
+exec_status_error: "[ERROR]"
+exec_status_timeout: "[Timeout - possibly executed]"
+
+# --- State humanisation (used in entity_list inside the LLM prompt) ---
+state_on: "on"
+state_off: "off"
+state_binary_on: "active"
+state_binary_off: "inactive"
+state_unknown: "unknown"

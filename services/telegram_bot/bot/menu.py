@@ -4,6 +4,7 @@ from telegram import ReplyKeyboardMarkup, KeyboardButton, Update
 from telegram.ext import Application, ContextTypes
 
 from core.config import MY_CHAT_ID
+from core.strings import t
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ async def send_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, is_
 
     if update.callback_query:
         msg = await update.callback_query.message.reply_text(
-            "🏠 Hauptmenü – wähle eine Option:",
+            t("main_menu_header"),
             reply_markup=reply_markup,
         )
         try:
@@ -50,7 +51,7 @@ async def send_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, is_
             pass
     elif update.message:
         msg = await update.message.reply_text(
-            "🏠 Hauptmenü – wähle eine Option:",
+            t("main_menu_header"),
             reply_markup=reply_markup,
         )
     else:
@@ -64,7 +65,7 @@ async def startup_menu(app: Application):
         reply_markup = get_main_menu_keyboard()
         await app.bot.send_message(
             chat_id=MY_CHAT_ID,
-            text="🏠 Bot wurde gestartet – Hauptmenü aktiviert.",
+            text=t("startup_message"),
             reply_markup=reply_markup,
         )
         logger.info("Startup menu sent")

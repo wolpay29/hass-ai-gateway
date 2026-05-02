@@ -115,3 +115,15 @@ runs:
       RAG_ENABLED: "false"
       LLM_PREPROCESSOR: "false"
       FALLBACK_MODE: "0"
+
+  # ------------------------------- Sprache: Englisch -------------------------------
+  # Verifiziert dass die LANGUAGE-Option korrekt durch die Pipeline gereicht wird:
+  # englische Prompts -> englische LLM-Antwort -> englische Status-/Reply-Strings.
+  # Cases die hier laufen sollen brauchen `language: en` in cases.yaml.
+  - name: "lang-en"
+    description: "RAG + Rewriter, aber LANGUAGE=en (englische Prompts und UI-Strings)"
+    env:
+      LANGUAGE: "en"
+      RAG_ENABLED: "true"
+      LLM_PREPROCESSOR: "true"
+      FALLBACK_MODE: "0"

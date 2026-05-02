@@ -10,7 +10,9 @@ from core.config import (
     LLM_HISTORY_SIZE, MAX_ACTIONS_PER_COMMAND,
     HISTORY_INCLUDE_ASSISTANT,
     USERCONFIG_DIR,
+    LANGUAGE,
 )
+from core.strings import t
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +82,9 @@ _memory_cache: dict[str, str] = {}
 def _load_prompts() -> dict:
     global _prompts_cache
     if _prompts_cache is None:
-        path = Path(__file__).parent / "prompts.yaml"
+        path = Path(__file__).parent / f"prompts_{LANGUAGE}.yaml"
+        if not path.exists():
+            path = Path(__file__).parent / "prompts_de.yaml"
         _prompts_cache = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     return _prompts_cache
 
@@ -110,7 +114,7 @@ def _build_prompt(key: str, memory: str | None = None, **kwargs) -> str:
     if memory:
         mem = _load_memory(memory)
         if mem:
-            text += "\n\n# Zusaetzliche Hinweise / haeufige Fehler\n" + mem
+            text += "\n\n" + t("prompt_memory_header") + "\n" + mem
     if LMSTUDIO_NO_THINK:
         text += "\n\n" + prompts["no_think_suffix"]
     return text
@@ -139,7 +143,7 @@ def _format_curated_entity_with_state(e: dict, ha_state: dict | None) -> str:
         attrs = ha_state.get("attributes", {}) or {}
         unit = attrs.get("unit_of_measurement") or ""
         human = _humanize_state(domain, ha_state.get("state"))
-        if unit and human not in ("an", "aus", "aktiv", "inaktiv", "unbekannt"):
+        if unit and human not in _HUMAN_STATE_WORDS:
             state_str = f"{human} {unit}".strip()
         else:
             state_str = human
@@ -149,7 +153,7 @@ def _format_curated_entity_with_state(e: dict, ha_state: dict | None) -> str:
         attrs_str = (" | " + ", ".join(attr_parts)) if attr_parts else ""
         parts.append(f"state: {state_str}{attrs_str}")
     elif domain in _STATEFUL_DOMAINS:
-        parts.append("state: unbekannt")
+        parts.append(f"state: {t('state_unknown')}")
 
     parts.append(f"actions: {actions}")
     if meta:
@@ -513,19 +517,26 @@ _STATEFUL_DOMAINS: frozenset[str] = frozenset({
 })
 
 
+_HUMAN_STATE_WORDS: frozenset[str] = frozenset({
+    t("state_on"), t("state_off"),
+    t("state_binary_on"), t("state_binary_off"),
+    t("state_unknown"),
+})
+
+
 def _humanize_state(domain: str, state: str | None) -> str:
     if state is None:
-        return "unbekannt"
+        return t("state_unknown")
     if domain in ("light", "switch", "automation", "input_boolean", "fan", "media_player"):
         if state == "on":
-            return "an"
+            return t("state_on")
         if state == "off":
-            return "aus"
+            return t("state_off")
     if domain == "binary_sensor":
         if state == "on":
-            return "aktiv"
+            return t("state_binary_on")
         if state == "off":
-            return "inaktiv"
+            return t("state_binary_off")
     return str(state)
 
 
@@ -547,7 +558,7 @@ def _format_entity_with_state(e: dict, ha_state: dict | None) -> str:
         attrs = ha_state.get("attributes", {}) or {}
         unit = attrs.get("unit_of_measurement") or ""
         human = _humanize_state(domain, raw_state)
-        state_str = f"{human} {unit}".strip() if unit and human not in ("an", "aus", "aktiv", "inaktiv", "unbekannt") else human
+        state_str = f"{human} {unit}".strip() if unit and human not in _HUMAN_STATE_WORDS else human
 
         relevant = _RELEVANT_ATTRS_BY_DOMAIN.get(domain, ())
         parts = []

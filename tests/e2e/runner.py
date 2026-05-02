@@ -407,11 +407,15 @@ def main() -> int:
                 print((run_dir / "log.txt").read_text(encoding="utf-8", errors="replace")[:3000])
                 continue
 
+            run_lang = (env.get("LANGUAGE") or "de").lower()
+
             # ---- Single cases ----
             for case in cases.get("single_cases", []):
                 if args.case and not fnmatch.fnmatchcase(case["id"], args.case):
                     continue
                 if any(fnmatch.fnmatchcase(run_name, p) for p in case.get("skip_runs", [])):
+                    continue
+                if (case.get("language") or "de").lower() != run_lang:
                     continue
                 rec = _execute_case(gateway, run_name, run, case, port, env, report_dir, extract_steps)
                 all_results.append(rec)
@@ -421,6 +425,8 @@ def main() -> int:
                 if args.case and not fnmatch.fnmatchcase(seq["id"], args.case):
                     continue
                 if any(fnmatch.fnmatchcase(run_name, p) for p in seq.get("skip_runs", [])):
+                    continue
+                if (seq.get("language") or "de").lower() != run_lang:
                     continue
                 base = int(seq.get("chat_id_base", 999000))
                 run_hash = abs(hash(run_name)) % 1000

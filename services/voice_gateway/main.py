@@ -54,6 +54,7 @@ from pydantic import BaseModel
 from core.voice import transcribe_audio
 from core.config import BOT_TOKEN, MY_CHAT_ID, TTS_EXTERNAL_URL, TTS_EXTERNAL_VOICE, RAG_ENABLED
 from core.processor import process_transcript_split
+from core.strings import t
 
 logging.basicConfig(
     format="%(asctime)s [gateway] %(levelname)s %(message)s",
@@ -187,9 +188,9 @@ def _reply_or_wav(result: dict, tts: bool) -> Response | JSONResponse:
 
     reply_text = result.get("reply") or ""
     if result.get("error") == "no_speech":
-        reply_text = "Ich habe dich leider nicht verstanden."
+        reply_text = t("tts_not_understood")
     elif result.get("error"):
-        reply_text = f"Fehler: {result['error']}"
+        reply_text = t("tts_error_prefix", error=result['error'])
 
     wav = _tts_to_wav(_normalize_for_tts(reply_text))
     if wav:
@@ -255,8 +256,8 @@ def rag_rebuild_endpoint(
         info = rag_status()
         logger.info(f"[Gateway] /rag_rebuild OK: {count} entities")
         notify_persistent(
-            title="RAG Rebuild abgeschlossen",
-            message=f"{count} Entities indiziert\nZuletzt: {info.get('last_indexed', '?')}",
+            title=t("notify_rag_done_title"),
+            message=t("notify_rag_done_msg", count=count, last=info.get('last_indexed', '?')),
             notification_id="rag_rebuild",
         )
         return JSONResponse({
@@ -268,7 +269,7 @@ def rag_rebuild_endpoint(
         logger.error(f"[Gateway] /rag_rebuild failed: {e}")
         from core.ha import notify_persistent
         notify_persistent(
-            title="RAG Rebuild fehlgeschlagen",
+            title=t("notify_rag_failed_title"),
             message=str(e),
             notification_id="rag_rebuild",
         )

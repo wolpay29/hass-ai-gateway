@@ -1,0 +1,55 @@
+# Deutsche UI-Strings und LLM-Prompt-Fragmente.
+# Wird via core/strings.py geladen wenn LANGUAGE=de.
+
+# --- Telegram bot: handlers.py ---
+error_parse_failed: "❓ Ich konnte deine Anfrage nicht verarbeiten."
+error_fallback_no_match: "❓ Kein passendes Gerät gefunden (REST-Fallback ohne Treffer)."
+error_needs_fallback_no_mode: "❓ Diese Aktion benötigt Parameter (z.B. Temperatur, Position) die hier nicht ausführbar sind. Aktiviere FALLBACK_MODE=2 für MCP-Unterstützung."
+error_no_match: "❓ Kein passendes Gerät gefunden."
+error_mcp_failed: "❓ MCP-Fallback fehlgeschlagen."
+error_default: "❓ Kein passendes Gerät gefunden."
+
+status_transcribing: "🎙️ Transkribiere..."
+status_no_speech: "❌ Sprachnachricht nicht verstanden."
+status_recognized: "📝 Erkannt: {text}"
+status_analysing_command: "🤖 Analysiere Befehl..."
+status_analysing: "🤖 Analysiere..."
+status_rag_disabled: "⚠️ RAG_ENABLED ist nicht aktiv."
+status_rag_rebuilding: "🔄 Starte RAG-Index Rebuild ..."
+status_rag_ready: "✅ RAG-Index bereit\nEntities: {count}\nZuletzt indiziert: {last}"
+status_rag_failed: "❌ Rebuild fehlgeschlagen: {error}"
+
+ignored_by_limit: "⚠️ *Durch Limit ({limit}) ignoriert:*"
+reply_chat_prefix: "💬 {reply}"
+
+# --- Telegram bot: menu.py / callbacks.py ---
+main_menu_header: "🏠 Hauptmenü – wähle eine Option:"
+startup_message: "🏠 Bot wurde gestartet – Hauptmenü aktiviert."
+use_menu_buttons: "Bitte nutze die Buttons im Hauptmenü."
+unknown_action: "❌ Unbekannte Aktion."
+executed: "✅ Ausgeführt."
+back_button: "⬅️ Zurück"
+
+# --- Voice gateway: main.py ---
+tts_not_understood: "Ich habe dich leider nicht verstanden."
+tts_error_prefix: "Fehler: {error}"
+notify_rag_done_title: "RAG Rebuild abgeschlossen"
+notify_rag_done_msg: "{count} Entities indiziert\nZuletzt: {last}"
+notify_rag_failed_title: "RAG Rebuild fehlgeschlagen"
+
+# --- LLM-Prompt-Fragmente (intern, gehen in den Systemprompt) ---
+prompt_memory_header: "# Zusaetzliche Hinweise / haeufige Fehler"
+history_user_label: "Nutzer:"
+history_assistant_label: "Assistent:"
+history_empty: "(leer)"
+exec_summary_marker: "ausgefuehrt:"
+exec_status_ok: "[OK]"
+exec_status_error: "[FEHLER]"
+exec_status_timeout: "[Timeout - moeglicherweise ausgefuehrt]"
+
+# --- State-Humanisierung (geht in entity_list im LLM-Prompt) ---
+state_on: "an"
+state_off: "aus"
+state_binary_on: "aktiv"
+state_binary_off: "inaktiv"
+state_unknown: "unbekannt"

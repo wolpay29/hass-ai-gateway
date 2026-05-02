@@ -45,6 +45,7 @@ from core.llm import (
 )
 from core.llm_lmstudio import fallback_via_mcp
 from core.ha import call_service, get_all_states
+from core.strings import t
 
 logger = logging.getLogger(__name__)
 
@@ -300,10 +301,15 @@ def process_transcript_split(
                 if isinstance(a.get("service_data"), dict) and a["service_data"]:
                     line += f" {a['service_data']}"
                 s = a.get("status", "ok")
-                line += " [OK]" if s == "ok" else (" [Timeout - moeglicherweise ausgefuehrt]" if s == "timeout" else " [FEHLER]")
+                if s == "ok":
+                    line += " " + t("exec_status_ok")
+                elif s == "timeout":
+                    line += " " + t("exec_status_timeout")
+                else:
+                    line += " " + t("exec_status_error")
                 parts.append(line)
             if parts:
-                append_execution_summary(chat_id, "ausgefuehrt: " + ", ".join(parts))
+                append_execution_summary(chat_id, t("exec_summary_marker") + " " + ", ".join(parts))
 
         return result
 

@@ -16,22 +16,22 @@ import logging
 from core.voice import ensure_voice_dir, transcribe_audio
 from core.config import VOICE_REPLY_WITH_TRANSCRIPT, MAX_ACTIONS_PER_COMMAND, RAG_ENABLED
 from core.processor import process_transcript_split
+from core.strings import t
 
 logger = logging.getLogger(__name__)
 
 
-# Error code → user-visible German message. Keeps all Telegram-facing text in
-# one place so translating or rewording is a one-line change.
-_ERROR_MESSAGES = {
-    "parse_failed":           "❓ Ich konnte deine Anfrage nicht verarbeiten.",
-    "fallback_no_match":      "❓ Kein passendes Gerät gefunden (REST-Fallback ohne Treffer).",
-    "needs_fallback_no_mode": (
-        "❓ Diese Aktion benötigt Parameter (z.B. Temperatur, Position) "
-        "die hier nicht ausführbar sind. Aktiviere FALLBACK_MODE=2 für MCP-Unterstützung."
-    ),
-    "no_match":               "❓ Kein passendes Gerät gefunden.",
-    "mcp_failed":             "❓ MCP-Fallback fehlgeschlagen.",
-}
+def _error_message(code: str) -> str:
+    """Map a processor error code to a localized user-facing string."""
+    mapping = {
+        "parse_failed":           "error_parse_failed",
+        "fallback_no_match":      "error_fallback_no_match",
+        "needs_fallback_no_mode": "error_needs_fallback_no_mode",
+        "no_match":               "error_no_match",
+        "mcp_failed":             "error_mcp_failed",
+    }
+    key = mapping.get(code)
+    return t(key) if key else ""
 
 
 def _format_reply(result: dict) -> str:
@@ -44,10 +44,11 @@ def _format_reply(result: dict) -> str:
     # Special case: "no_match" with a reply from the LLM — show the reply
     # (preserves the original "💬 {reply}" behaviour for chatty LLM responses).
     if error == "no_match" and reply:
-        return f"💬 {reply}"
+        return t("reply_chat_prefix", reply=reply)
 
-    if error and error in _ERROR_MESSAGES:
-        return _ERROR_MESSAGES[error]
+    err_msg = _error_message(error) if error else ""
+    if err_msg:
+        return err_msg
 
     parts: list[str] = []
     if reply:
@@ -62,12 +63,12 @@ def _format_reply(result: dict) -> str:
 
     if ignored:
         parts.append("")
-        parts.append(f"⚠️ *Durch Limit ({MAX_ACTIONS_PER_COMMAND}) ignoriert:*")
+        parts.append(t("ignored_by_limit", limit=MAX_ACTIONS_PER_COMMAND))
         for a in ignored:
             parts.append(f"❌ `{a['action']}` -> `{a['entity_id']}`")
 
     text = "\n".join(parts).strip()
-    return text or "❓ Kein passendes Gerät gefunden."
+    return text or t("error_default")
 
 
 async def _dispatch(update, context, transcript: str, status_msg=None):
@@ -79,7 +80,7 @@ async def _dispatch(update, context, transcript: str, status_msg=None):
         None, lambda: process_transcript_split(transcript, chat_id=chat_id)
     )
 
-    early_text = partial.get("reply") or _ERROR_MESSAGES.get(partial.get("error", ""), "❓ Kein passendes Gerät gefunden.")
+    early_text = partial.get("reply") or _error_message(partial.get("error", "")) or t("error_default")
 
     if status_msg:
         try:
@@ -117,17 +118,17 @@ async def handle_voice(update, context):
     file_path = voice_dir / f"{update.message.voice.file_unique_id}.ogg"
     await telegram_file.download_to_drive(custom_path=str(file_path))
 
-    await update.message.reply_text("🎙️ Transkribiere...")
+    await update.message.reply_text(t("status_transcribing"))
     transcript = transcribe_audio(str(file_path))
 
     if not transcript:
-        await update.message.reply_text("❌ Sprachnachricht nicht verstanden.")
+        await update.message.reply_text(t("status_no_speech"))
         return
 
     if VOICE_REPLY_WITH_TRANSCRIPT:
-        await update.message.reply_text(f"📝 Erkannt: {transcript}")
+        await update.message.reply_text(t("status_recognized", text=transcript))
 
-    status_msg = await update.message.reply_text("🤖 Analysiere Befehl...")
+    status_msg = await update.message.reply_text(t("status_analysing_command"))
     await _dispatch(update, context, transcript, status_msg=status_msg)
 
 
@@ -135,16 +136,16 @@ async def handle_text(update, context):
     if not update.message or not update.message.text:
         return
 
-    status_msg = await update.message.reply_text("🤖 Analysiere...")
+    status_msg = await update.message.reply_text(t("status_analysing"))
     await _dispatch(update, context, update.message.text.strip(), status_msg=status_msg)
 
 
 async def handle_rag_rebuild(update, context):
     if not RAG_ENABLED:
-        await update.message.reply_text("⚠️ RAG_ENABLED ist nicht aktiv.")
+        await update.message.reply_text(t("status_rag_disabled"))
         return
 
-    await update.message.reply_text("🔄 Starte RAG-Index Rebuild ...")
+    await update.message.reply_text(t("status_rag_rebuilding"))
     try:
         from core.rag.index import build as rag_build, status as rag_status
 
@@ -152,10 +153,8 @@ async def handle_rag_rebuild(update, context):
         count = await loop.run_in_executor(None, rag_build)
         info = rag_status()
         await update.message.reply_text(
-            f"✅ RAG-Index bereit\n"
-            f"Entities: {count}\n"
-            f"Zuletzt indiziert: {info.get('last_indexed', '?')}"
+            t("status_rag_ready", count=count, last=info.get("last_indexed", "?"))
         )
     except Exception as e:
         logger.error(f"[RAG Rebuild] Fehler: {e}")
-        await update.message.reply_text(f"❌ Rebuild fehlgeschlagen: {e}")
+        await update.message.reply_text(t("status_rag_failed", error=e))

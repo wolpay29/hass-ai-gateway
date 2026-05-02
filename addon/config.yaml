@@ -26,6 +26,7 @@ ports_description:
   "8766/tcp": Notify Gateway HTTP API (HA webhook target)
 
 options:
+  language: "de"
   services:
     voice_gateway: true
     notify_gateway: true
@@ -88,6 +89,7 @@ options:
     append_executions: false
 
 schema:
+  language: "list(de|en)"
   services:
     voice_gateway: bool
     notify_gateway: bool

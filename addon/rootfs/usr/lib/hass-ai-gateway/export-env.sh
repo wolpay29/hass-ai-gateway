@@ -3,6 +3,9 @@
 # It maps /data/options.json keys -> the env vars core/config.py expects.
 # Pure exports; no exec / no flow control.
 
+# --- Language (UI strings + LLM prompts) ---
+export LANGUAGE="$(bashio::config 'language')"
+
 # --- Telegram + HA ---
 export BOT_TOKEN="$(bashio::config 'telegram.bot_token')"
 export MY_CHAT_ID="$(bashio::config 'telegram.chat_id')"
