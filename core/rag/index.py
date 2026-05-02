@@ -1,6 +1,8 @@
 import fnmatch
+import json
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
 
 import requests
@@ -82,9 +84,75 @@ def _is_blacklisted(entity_id: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatchcase(entity_id, p) for p in patterns)
 
 
+def _fetch_area_mapping() -> dict[str, str]:
+    """Build {entity_id: area_name} from HA's area + device + entity registries.
+
+    Returns an empty dict when no areas are configured, the registries are not
+    reachable, or the token lacks permission. The build path treats an empty
+    mapping as "no area info available" and proceeds normally — entities just
+    end up without an explicit area annotation, exactly like before.
+    """
+    headers = {
+        "Authorization": f"Bearer {HA_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    def _get(path: str) -> list[dict]:
+        try:
+            r = requests.get(f"{HA_URL}{path}", headers=headers, timeout=15)
+            if r.status_code != 200:
+                logger.warning(f"[RAG Index] {path} -> HTTP {r.status_code}, area data skipped")
+                return []
+            data = r.json()
+            return data if isinstance(data, list) else []
+        except Exception as e:
+            logger.warning(f"[RAG Index] {path} fehlgeschlagen ({e}), area data skipped")
+            return []
+
+    areas = _get("/api/config/area_registry")
+    if not areas:
+        return {}
+    area_id_to_name: dict[str, str] = {
+        a["area_id"]: a.get("name") or a["area_id"]
+        for a in areas if a.get("area_id")
+    }
+
+    devices = _get("/api/config/device_registry")
+    device_id_to_area: dict[str, str] = {}
+    for d in devices:
+        did = d.get("id")
+        aid = d.get("area_id")
+        if did and aid and aid in area_id_to_name:
+            device_id_to_area[did] = area_id_to_name[aid]
+
+    entities = _get("/api/config/entity_registry")
+    mapping: dict[str, str] = {}
+    for e in entities:
+        eid = e.get("entity_id")
+        if not eid:
+            continue
+        aid = e.get("area_id")
+        if aid and aid in area_id_to_name:
+            mapping[eid] = area_id_to_name[aid]
+            continue
+        did = e.get("device_id")
+        if did and did in device_id_to_area:
+            mapping[eid] = device_id_to_area[did]
+
+    logger.info(
+        f"[RAG Index] Area-Mapping: {len(area_id_to_name)} Areas, "
+        f"{len(mapping)} Entities mit Area-Zuweisung"
+    )
+    return mapping
+
+
 def _fetch_ha_states() -> list[dict]:
     """Fetch full /api/states. We keep `unit_of_measurement` for sensors
-    which we use in the embed_text to help queries like 'wie viele kWh'."""
+    which we use in the embed_text to help queries like 'wie viele kWh'.
+
+    We also resolve each entity's area (if any) via the HA area/device/entity
+    registries. Entities without an area get area="" and behave exactly like
+    before — area is purely additive."""
     headers = {
         "Authorization": f"Bearer {HA_TOKEN}",
         "Content-Type": "application/json",
@@ -92,6 +160,8 @@ def _fetch_ha_states() -> list[dict]:
     r = requests.get(f"{HA_URL}/api/states", headers=headers, timeout=15)
     r.raise_for_status()
     raw = r.json()
+
+    area_map = _fetch_area_mapping()
 
     out = []
     for s in raw:
@@ -104,6 +174,7 @@ def _fetch_ha_states() -> list[dict]:
             "domain": eid.split(".", 1)[0],
             "friendly_name": attrs.get("friendly_name", ""),
             "unit": attrs.get("unit_of_measurement", ""),
+            "area": area_map.get(eid, ""),
         })
     return out
 
@@ -112,6 +183,7 @@ def _make_embed_text(
     entity_id: str,
     friendly_name: str,
     unit: str,
+    area: str,
     curated_description: str,
     curated_keywords: list[str],
 ) -> str:
@@ -121,7 +193,12 @@ def _make_embed_text(
       - entity_id (often contains meaningful tokens: 'pool_pump', 'licht_paul')
       - friendly_name (HA's human-readable name)
       - unit (helps queries like 'wie viele kWh' find sensors with kWh unit)
+      - area (HA-configured room/area name, when available)
       - curated description + keywords (if entity is in entities.yaml)
+
+    Area is appended only when set — entities without a configured area keep
+    the exact same embed text as before, so retrieval doesn't regress for
+    setups that rely on the entity_id/friendly_name carrying the room.
 
     Domain, state and actions are NOT here — they are metadata for the LLM,
     not search signals.
@@ -131,6 +208,8 @@ def _make_embed_text(
         parts.append(friendly_name)
     if unit:
         parts.append(unit)
+    if area:
+        parts.append(area)
     if curated_description:
         parts.append(curated_description)
     if curated_keywords:
@@ -190,8 +269,19 @@ def build() -> int:
 
         curated_keywords = cur.get("keywords", []) if cur else []
         curated_description = cur.get("description", "") if cur else ""
-        curated_meta = cur.get("meta", "") if cur else ""
+        curated_meta_user = cur.get("meta", "") if cur else ""
         actions = _resolve_actions(ha["domain"], cur)
+        area = ha.get("area", "")
+
+        # Combine area into meta so the LLM sees it as a `note: ...` line.
+        # Area first (when present), then user-curated meta. If neither is
+        # set, the field stays empty — exactly like before.
+        meta_parts: list[str] = []
+        if area:
+            meta_parts.append(f"Area: {area}")
+        if curated_meta_user:
+            meta_parts.append(curated_meta_user)
+        combined_meta = " | ".join(meta_parts)
 
         friendly_name = curated_description or ha.get("friendly_name", "")
 
@@ -201,11 +291,13 @@ def build() -> int:
             "domain": ha["domain"],
             "actions": actions,
             "curated_keywords": curated_keywords,
-            "curated_meta": curated_meta,
+            "curated_meta": combined_meta,
+            "area": area,
             "embed_text": _make_embed_text(
                 entity_id=eid,
                 friendly_name=ha.get("friendly_name", ""),
                 unit=ha.get("unit", ""),
+                area=area,
                 curated_description=curated_description,
                 curated_keywords=curated_keywords,
             ),
@@ -231,10 +323,106 @@ def build() -> int:
     finally:
         conn.close()
 
+    _write_rebuild_report(records, blacklist=blacklist, excluded=excluded)
+
     logger.info(
         f"[RAG Index] Rebuild abgeschlossen: {len(records)} Entities indiziert"
     )
     return len(records)
+
+
+def _write_rebuild_report(records: list[dict], blacklist: list[str], excluded: list[dict]) -> None:
+    """Write a human-readable + JSON snapshot of the freshly built index.
+
+    Both files land next to the SQLite DB (`RAG_DB_PATH`):
+      - rag_rebuild_report.md   — Markdown overview, easy to skim by hand
+      - rag_rebuild_report.json — same data structured, easy to diff / parse
+
+    Lists every indexed entity with the exact `embed_text` fed to the embedder
+    and the `meta` (note) the LLM will see at query time, plus the source
+    fields they were built from. Overwritten on every rebuild.
+    """
+    db_dir = Path(RAG_DB_PATH).parent
+    db_dir.mkdir(parents=True, exist_ok=True)
+    md_path = db_dir / "rag_rebuild_report.md"
+    json_path = db_dir / "rag_rebuild_report.json"
+    timestamp = datetime.now().isoformat(timespec="seconds")
+
+    with_area = sum(1 for r in records if r.get("area"))
+    with_meta = sum(1 for r in records if r.get("curated_meta"))
+    with_keywords = sum(1 for r in records if r.get("curated_keywords"))
+
+    payload = {
+        "generated_at": timestamp,
+        "summary": {
+            "indexed": len(records),
+            "with_area": with_area,
+            "with_curated_meta": with_meta,
+            "with_curated_keywords": with_keywords,
+            "blacklist_patterns": len(blacklist),
+            "blacklisted_entities": [e["entity_id"] for e in excluded],
+        },
+        "entities": [
+            {
+                "entity_id": r["entity_id"],
+                "domain": r["domain"],
+                "friendly_name": r["friendly_name"],
+                "area": r.get("area", ""),
+                "actions": r.get("actions", []),
+                "curated_keywords": r.get("curated_keywords", []),
+                "meta_for_llm": r.get("curated_meta", ""),
+                "embed_text": r.get("embed_text", ""),
+            }
+            for r in sorted(records, key=lambda x: (x["domain"], x["entity_id"]))
+        ],
+    }
+
+    try:
+        json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"[RAG Index] Konnte JSON-Report nicht schreiben: {e}")
+
+    lines: list[str] = []
+    lines.append(f"# RAG Rebuild Report")
+    lines.append("")
+    lines.append(f"_Generated: {timestamp}_")
+    lines.append("")
+    lines.append("## Summary")
+    lines.append("")
+    lines.append(f"- Indexed entities: **{len(records)}**")
+    lines.append(f"- With HA area assigned: **{with_area}**")
+    lines.append(f"- With curated meta (note): **{with_meta}**")
+    lines.append(f"- With curated keywords: **{with_keywords}**")
+    lines.append(f"- Blacklist patterns: **{len(blacklist)}**")
+    if excluded:
+        lines.append(f"- Blacklisted (excluded from index): {len(excluded)}")
+        for e in excluded:
+            lines.append(f"  - `{e['entity_id']}`")
+    lines.append("")
+    lines.append("## Entities")
+    lines.append("")
+    lines.append("Per entity: what was used to build the embed text (search signal) and the meta the LLM sees at query time.")
+    lines.append("")
+
+    for r in sorted(records, key=lambda x: (x["domain"], x["entity_id"])):
+        lines.append(f"### `{r['entity_id']}`")
+        lines.append("")
+        lines.append(f"- **friendly_name**: {r['friendly_name'] or '_(none)_'}")
+        lines.append(f"- **domain**: {r['domain']}")
+        lines.append(f"- **area**: {r.get('area') or '_(none)_'}")
+        actions = r.get("actions", []) or []
+        lines.append(f"- **actions**: {', '.join(actions) if actions else '_(none)_'}")
+        kws = r.get("curated_keywords", []) or []
+        lines.append(f"- **curated_keywords**: {', '.join(kws) if kws else '_(none)_'}")
+        lines.append(f"- **meta (LLM sees as `note:`)**: {r.get('curated_meta') or '_(none)_'}")
+        lines.append(f"- **embed_text (used for retrieval)**: `{r.get('embed_text', '')}`")
+        lines.append("")
+
+    try:
+        md_path.write_text("\n".join(lines), encoding="utf-8")
+        logger.info(f"[RAG Index] Report geschrieben: {md_path} und {json_path}")
+    except Exception as e:
+        logger.warning(f"[RAG Index] Konnte Markdown-Report nicht schreiben: {e}")
 
 
 def query(transcript: str) -> list[dict]:

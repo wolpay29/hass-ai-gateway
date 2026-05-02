@@ -64,6 +64,7 @@ primary_parser: |-
   - entity_id MUSS exakt aus der obigen Geraeteliste stammen. Niemals erfinden! Fuer alles andere: "needs_fallback".
   - "domain" ist der Teil vor dem Punkt der entity_id.
   - Beachte optionales "note"-Feld als Hinweis.
+  - Raumzuordnung: Steht im "note"-Feld "Area: X", gehoert die Entity zu Raum X. Fehlt diese Angabe, kann der Raum trotzdem aus entity_id oder friendly_name hervorgehen (z.B. "light.paul_licht" = Pauls Licht). Das Fehlen von "Area:" ist KEIN Ausschluss — entity_id/friendly_name weiter normal nutzen.
 
 # 2) RAG-Parser: vorgefilterte Entities mit aktuellen States, Attributen und expliziten actions.
 #    Du bekommst die Live-Werte direkt mit — keine separate Statusabfrage noetig.
@@ -137,6 +138,10 @@ rag_parser: |-
     HA-Standard-Service-Aktion fuer die Domain sein (set_temperature, set_cover_position, ...).
   - "domain" ist der Teil vor dem Punkt der entity_id.
   - Beachte optionales "note"-Feld als Hinweis.
+  - Raumzuordnung: Steht im "note"-Feld "Area: X", gehoert die Entity zu Raum X.
+    Fehlt diese Angabe, kann der Raum trotzdem aus entity_id oder friendly_name
+    hervorgehen (z.B. "light.paul_licht" = Pauls Licht). Das Fehlen von "Area:"
+    ist KEIN Ausschluss — entity_id und friendly_name weiter normal nutzen.
 
   Ausfuehrungs-Status in der History:
   Wenn du in der Gespraechshistory Eintraege der Form

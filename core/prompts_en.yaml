@@ -64,6 +64,7 @@ primary_parser: |-
   - entity_id MUST come exactly from the device list above. Never invent! For everything else: "needs_fallback".
   - "domain" is the part before the dot of the entity_id.
   - Pay attention to the optional "note" field as a hint.
+  - Room assignment: if the "note" field contains "Area: X", the entity belongs to area X. If this is missing, the area may still be implied by entity_id or friendly_name (e.g. "light.paul_light" = Paul's light). A missing "Area:" is NOT an exclusion — keep using entity_id/friendly_name as usual.
 
 # 2) RAG parser: pre-filtered entities with live states, attributes, and explicit actions.
 #    You receive the live values directly — no separate status query needed.
@@ -136,6 +137,10 @@ rag_parser: |-
     standard HA service action for the domain (set_temperature, set_cover_position, ...).
   - "domain" is the part before the dot of the entity_id.
   - Pay attention to the optional "note" field as a hint.
+  - Room assignment: if the "note" field contains "Area: X", the entity belongs
+    to area X. If this is missing, the area may still be implied by entity_id
+    or friendly_name (e.g. "light.paul_light" = Paul's light). A missing
+    "Area:" is NOT an exclusion — keep using entity_id and friendly_name as usual.
 
   Execution status in history:
   When you see entries in the conversation history of the form
