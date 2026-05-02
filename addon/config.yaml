@@ -1,5 +1,5 @@
 name: Hass AI Gateway
-version: "1.0.2"
+version: "1.0.3"
 slug: hass_ai_gateway
 description: >-
   Voice + Telegram + Notify gateways for Home Assistant.
