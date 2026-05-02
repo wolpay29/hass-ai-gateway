@@ -5,184 +5,136 @@ configuration:
 
   services:
     name: Services
-    description: Toggle each service on or off. A disabled service sleeps but stays in the container.
+    description: "Toggle each service on or off. A disabled service sleeps but stays in the container. | Voice Gateway: HTTP API on port 8765 for RPi / ESP32 audio clients. | Notify Gateway: HTTP API on port 8766 for HA notifications, fans out to TTS and Telegram. | Telegram Bot: Long-polling bot for voice + text commands and inline menus."
     voice_gateway:
       name: Enable Voice Gateway
-      description: HTTP API on port 8765 for RPi / ESP32 audio clients.
     notify_gateway:
       name: Enable Notify Gateway
-      description: HTTP API on port 8766 that Home Assistant posts notifications to. Fans out to TTS and / or Telegram.
     telegram_bot:
       name: Enable Telegram Bot
-      description: Long-polling Telegram bot for voice + text commands and inline menus.
 
   telegram:
     name: Telegram
-    description: Bot credentials. Required when the Telegram Bot is enabled.
+    description: "Required when Telegram Bot is enabled. | Bot Token: Get from @BotFather. | Chat ID: Your numeric Telegram user ID — the bot only responds to this ID."
     bot_token:
       name: Bot Token
-      description: Required. Get from @BotFather.
     chat_id:
       name: Chat ID
-      description: Required. Your numeric Telegram user ID — the bot only responds to this ID.
 
   home_assistant:
     name: Home Assistant
-    description: Connection to the HA REST API.
+    description: "Connection to the HA REST API. | URL: Default http://supervisor/core works inside the add-on. Only change for external HA instances. | Token: Leave empty to use the auto-injected supervisor token. | Service Timeout: Seconds to wait for a HA service call. Default 15. | Dry-run: When on, service calls are only logged — no real HA actions executed."
     url:
       name: URL
-      description: Default `http://supervisor/core` works inside the add-on. Only change for external HA instances.
     token:
       name: Token
-      description: Leave empty to use the auto-injected supervisor token. Only needed for external HA instances.
     service_timeout:
       name: Service call timeout (s)
-      description: How long to wait for a HA service call before giving up. Default 15 s.
     dry_run:
       name: Dry-run mode
-      description: When on, service calls are only logged — no real HA actions are executed. State reads stay live.
 
   lmstudio:
     name: LM Studio
-    description: Local LLM server (OpenAI-compatible). Required when Voice Gateway or Telegram Bot is enabled.
+    description: "Local LLM server (OpenAI-compatible). Required when Voice Gateway or Telegram Bot is enabled. | URL: Required. e.g. http://192.168.1.10:1234. | Model: Required. Must be loaded in LM Studio. | API Key: Leave empty if LM Studio has no auth. | Timeout: Default 30 s. | Temperature: Default 0.1, lower = more reliable. | Suppress think tags: Enable for reasoning models (QwQ, DeepSeek-R1). | Context length: Default 8000, only relevant for fallback mode 2. | MCP allowed tools: Comma-separated whitelist, empty = all. | Max actions: 0 = unlimited."
     url:
       name: URL
-      description: Required. e.g. `http://192.168.1.10:1234`.
     model:
       name: Model
-      description: Required. The model name as shown in LM Studio. Must be loaded and running.
     api_key:
-      name: API key
-      description: Leave empty if LM Studio has no authentication enabled.
+      name: API Key
     timeout:
       name: Timeout (s)
-      description: How long to wait for an LLM response. Default 30 s. Increase for slow hardware or large models.
     temperature:
       name: Temperature
-      description: Controls randomness. 0.0–0.3 recommended for reliable action parsing. Default 0.1.
     no_think:
       name: Suppress think tags
-      description: Strips `<think>` blocks from output. Enable for reasoning models (e.g. QwQ, DeepSeek-R1) to avoid broken JSON.
     context_length:
       name: Context length
-      description: Token context window. Default 8000. Only relevant for MCP fallback (mode 2).
     mcp_allowed_tools:
       name: MCP allowed tools
-      description: Comma-separated whitelist of HA MCP tools. Only used in fallback mode 2. Leave empty to allow all.
     max_actions_per_command:
       name: Max actions per command
-      description: Limits how many HA actions the LLM can execute per request. 0 = unlimited.
 
   whisper:
     name: Whisper (Speech-to-Text)
-    description: External STT server (OpenAI-compatible). Required for voice input. Leave empty for text-only operation.
+    description: "External STT server (OpenAI-compatible). Leave empty for text-only operation. | URL: e.g. http://192.168.1.10:10300/v1/audio/transcriptions. Leave empty to disable voice input. | Model: Must match what the server has loaded."
     url:
       name: URL
-      description: Leave empty to disable voice input. e.g. `http://192.168.1.10:10300/v1/audio/transcriptions`.
     model:
       name: Model
-      description: Model name sent to the Whisper server. Must match what the server has loaded.
 
   tts:
     name: TTS (Text-to-Speech)
-    description: External TTS server. Leave empty to return text-only JSON from the voice gateway.
+    description: "External TTS server for voice replies. Leave empty to return text-only JSON. | URL: e.g. http://192.168.1.10:10400/tts. Leave empty to disable TTS. | Voice: Voice ID sent to the server, e.g. de_DE-thorsten-low."
     url:
       name: URL
-      description: Leave empty to disable TTS. e.g. `http://192.168.1.10:10400/tts`.
     voice:
       name: Voice ID
-      description: Voice identifier sent to the TTS server. e.g. `de_DE-thorsten-low`.
 
   gateways:
     name: Gateway Ports & Auth
-    description: Network settings for the Voice Gateway and Notify Gateway.
+    description: "Network settings for Voice and Notify Gateway. | Voice port: Default 8765. If changed, also update the Network section. | Voice API key: Optional. When set, clients must send X-Api-Key header. | Forward to Telegram: Sends a Telegram message for every voice command. | Include transcript: Adds recognised speech text to the Telegram receipt. | Notify port: Default 8766. | Notify timeout: Default 10 s."
     voice_port:
       name: Voice Gateway port
-      description: Port the voice gateway listens on. Default 8765. If changed, also update the Network section in the add-on UI.
     voice_api_key:
       name: Voice Gateway API key
-      description: Optional shared secret. When set, clients must send `X-Api-Key` header. Leave empty for open LAN access.
     voice_telegram_push:
       name: Forward voice replies to Telegram
-      description: Sends a Telegram message for every voice command. Requires Telegram Bot enabled.
     voice_reply_with_transcript:
       name: Include transcript in voice reply
-      description: Adds the recognised speech text to the Telegram receipt. Useful for spotting STT errors.
     notify_port:
       name: Notify Gateway port
-      description: Port the notify gateway listens on. Default 8766. If changed, also update the Network section.
     notify_http_timeout:
       name: Notify HTTP timeout (s)
-      description: How long to wait when forwarding notifications to external targets. Default 10 s.
 
   rag:
     name: RAG (Entity Retrieval)
-    description: Semantic vector search over HA entities. After changing entities send /rag_rebuild in Telegram.
+    description: "Semantic vector search over HA entities. After changing entities send /rag_rebuild in Telegram. | Enable: When off, only entities.yaml is used. | Top-K: Entities returned per request. Default 15. | Keyword boost: 0 = pure vector, default 0.3. | Distance threshold: 0 = off (default). | Embed URL: Leave empty to reuse LM Studio URL. | Embed API key: Leave empty to reuse LM Studio key. | Embed model: Default text-embedding-nomic-embed-text-v2-moe. | Embed dim: Default 768. Changing this triggers index rebuild."
     enabled:
       name: Enable RAG
-      description: When on, all HA entities are indexed in a vector DB and retrieved per request. When off, only entities.yaml is used.
     top_k:
       name: Top-K candidates
-      description: How many entities the vector search returns per request. Default 15.
     keyword_boost:
       name: Keyword boost
-      description: Boosts entities whose keywords appear in the transcript. 0 = pure vector. Default 0.3.
     distance_threshold:
       name: Distance threshold
-      description: Drops candidates above this vector distance. 0 = off (default). Best candidate is always kept.
     embed_url:
       name: Embedding URL
-      description: Leave empty to reuse the LM Studio URL. Only set if the embedding model runs on a different server.
     embed_api_key:
       name: Embedding API key
-      description: Leave empty to reuse the LM Studio API key. Only needed if the embedding server requires separate auth.
     embed_model:
       name: Embedding model
-      description: Must be loaded on the embedding server. Default `text-embedding-nomic-embed-text-v2-moe`.
     embed_dim:
       name: Embedding dimension
-      description: Must match the embedding model output. Default 768. Changing this triggers an automatic index rebuild.
 
   preprocessor:
     name: LLM Preprocessor
-    description: Small extra LLM call before the main pipeline. Classifies intent, fixes STT errors, rewrites query for better RAG results.
+    description: "Small extra LLM call before the main pipeline. Classifies intent, fixes STT errors, rewrites query for better RAG results. | Enable: One extra LLM call per request. | URL / API key / Model: Leave empty to reuse LM Studio settings. A small fast model is recommended (e.g. Qwen 1.5B). | Timeout: Default 30 s. | Temperature: Default 0.1."
     enabled:
       name: Enable Preprocessor
-      description: One additional LLM call per request. Improves accuracy for vague or follow-up commands at the cost of extra latency.
     url:
       name: URL
-      description: Leave empty to reuse the LM Studio URL.
     api_key:
       name: API key
-      description: Leave empty to reuse the LM Studio API key.
     model:
       name: Model
-      description: Leave empty to reuse the LM Studio model. A small fast model is recommended (e.g. Qwen 1.5B).
     timeout:
       name: Timeout (s)
-      description: How long to wait for the preprocessor response. Default 30 s.
     temperature:
       name: Temperature
-      description: Controls randomness for the preprocessor. Default 0.1.
 
   advanced:
     name: Fallback & History
-    description: What to do when no entity matches, and how much conversation history the LLM sees.
+    description: "What to do when no entity matches, and how much conversation history the LLM sees. | Fallback mode: 0 = error (default), 1 = fetch all live states and retry (beta), 2 = hand off to LM Studio with MCP tools (beta). | Fallback max entities: 0 = no limit. | Fallback domains: Comma-separated HA domains for mode-1 fallback. | History size: Past user turns the LLM sees. 0 = off. | Include assistant replies: LLM also sees its own previous replies. | Append executions: Adds executed HA actions to history."
     fallback_mode:
       name: Fallback mode
-      description: "0 = return error (default). 1 = fetch all live HA states and retry (beta). 2 = hand off to LM Studio with HA MCP tools (beta)."
     fallback_rest_max_entities:
       name: Fallback REST max entities
-      description: Limits entities in the mode-1 fallback prompt. 0 = no limit. Set e.g. 200 to avoid hitting the context window.
     fallback_rest_domains:
       name: Fallback REST domains
-      description: Comma-separated HA domains included in the mode-1 fallback. Restricts the entity list to relevant domains.
     history_size:
       name: Conversation history size
-      description: How many past user turns the LLM sees per chat. 0 = no history (default).
     history_include_assistant:
       name: Include assistant replies in history
-      description: When on, the LLM also sees its own previous replies. Enables more natural follow-up handling.
     history_append_executions:
       name: Append executed actions to history
-      description: Adds executed HA actions to history so follow-ups like "turn it off again" have context.

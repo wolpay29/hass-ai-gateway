@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2 — 2026-05-03
+
+- Each config section now shows a summary of all its fields in the section description.
+
 ## 1.2.1 — 2026-05-03
 
 - Fix: field descriptions now appear above config inputs in HA UI (removed incorrect `fields:` wrapper from translations).
