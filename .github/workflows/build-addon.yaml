@@ -1,0 +1,83 @@
+name: Build & Publish Addon
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            base: ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.19
+          - arch: aarch64
+            platform: linux/arm64
+            base: ghcr.io/home-assistant/aarch64-base-python:3.12-alpine3.19
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage sources into addon/_build
+        run: |
+          mkdir -p addon/_build/services
+          cp -r core                          addon/_build/core
+          cp -r services/voice_gateway        addon/_build/services/voice_gateway
+          cp -r services/notify_gateway       addon/_build/services/notify_gateway
+          cp -r services/telegram_bot         addon/_build/services/telegram_bot
+          find addon/_build -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+          find addon/_build -type f -name '.env*' ! -name '*.example' -delete
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read addon version
+        id: meta
+        run: |
+          VERSION=$(grep '^version:' addon/config.yaml | sed 's/version: *"\(.*\)"/\1/')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/${REPO_OWNER}/hass-ai-gateway/${{ matrix.arch }}-addon-hass_ai_gateway" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: addon
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            BUILD_FROM=${{ matrix.base }}
+            BUILD_VERSION=${{ steps.meta.outputs.version }}
+            BUILD_ARCH=${{ matrix.arch }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:latest
+          labels: |
+            io.hass.version=${{ steps.meta.outputs.version }}
+            io.hass.arch=${{ matrix.arch }}
+            io.hass.type=addon
+            io.hass.name=Hass AI Gateway
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
