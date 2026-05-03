@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="addon/logo.png" alt="Hass AI Gateway" width="200"/>
+</p>
+
 # Hass AI Gateway
 
 Control your smart home with a **local LLM** — no cloud, no subscriptions. Connect LM Studio (or any OpenAI-compatible server) to Home Assistant and interact via Telegram, voice message, or microphone in any room.

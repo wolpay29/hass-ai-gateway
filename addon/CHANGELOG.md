@@ -1,8 +1,9 @@
 # Changelog
 
-## 1.2.2 — 2026-05-03
+## 1.2.3 — 2026-05-03
 
 - Each config section now shows a summary of all its fields in the section description.
+- Logo Update
 
 ## 1.2.1 — 2026-05-03
 
