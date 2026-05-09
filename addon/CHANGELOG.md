@@ -2,21 +2,21 @@
 
 ## 1.2.7 — 2026-05-09
 
-- Prompts entpersonalisiert: alle setup-spezifischen Beispiele (Personennamen, Pool, OG/EG, Rollos, Räume) aus `prompts_de.yaml` und `prompts_en.yaml` entfernt. Übrig bleibt nur das universelle HA-Vokabular (JSON-Schema, action-Namen, domains, service_data).
-- `pre_llm_memory.md` und `post_llm_memory.md` neu strukturiert: Standardinhalt ist leer, ausführlicher Inspirations-Block in HTML-Kommentaren — User editiert dort eigene Setup-Hinweise (Namen, Stockwerke, Spitznamen, STT-Korrekturen, Verbote).
-- Doku ergänzt: neuer Abschnitt „Memory files — your per-setup tuning" in DOCS.md, kurzer Hinweis in README.
+- Depersonalised the system prompts: all setup-specific examples (personal names, pool, upstairs/downstairs, blinds, room labels) removed from `prompts_de.yaml` and `prompts_en.yaml`. Only the universal HA contract remains (JSON schema, action names, domains, service_data).
+- Restructured `pre_llm_memory.md` and `post_llm_memory.md`: default content is empty, with an expanded inspiration block inside HTML comments — users add their own setup hints (names, floors, nicknames, STT corrections, never-do rules) by uncommenting or rewriting.
+- Documentation: new "Memory files — your per-setup tuning" section in DOCS.md and a short pointer from the README.
 
 ## 1.2.6 — 2026-05-09
 
-- Auto-RAG-Build beim Add-on-Start, wenn `rag.enabled=true`. Logs erscheinen im Add-on-Log; Fehler blockieren den Service-Start nicht.
+- Auto-rebuild the RAG index on add-on startup when `rag.enabled=true`. Progress is visible in the add-on log; failures only log a warning and never block service startup.
 
 ## 1.2.5 — 2026-05-09
 
-- Fix: GHCR-Image-Pfad nach Account-Umbenennung (`wolpay29` → `wolpa29`) korrigiert.
+- Fix: corrected the GHCR image path after the GitHub account rename (`wolpay29` → `wolpa29`).
 
 ## 1.2.4 — 2026-05-09
 
-- Telegram ReplyKeyboard bleibt während Aktionen sichtbar; nach jeder Aktion wird eine frische Trägernachricht gesendet, damit die Tastatur auch bei aktivem 24h-Auto-Delete erhalten bleibt.
+- Telegram ReplyKeyboard now stays visible across actions; a fresh carrier message is sent after each action so the keyboard survives even with 24h chat auto-delete enabled.
 
 ## 1.2.3 — 2026-05-03
 
