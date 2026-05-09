@@ -1,5 +1,5 @@
 name: Hass AI Gateway
-version: "1.2.5"
+version: "1.2.6"
 slug: hass_ai_gateway
 description: >-
   Control Home Assistant with a local LLM via voice, Telegram, and notifications.
