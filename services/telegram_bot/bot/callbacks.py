@@ -6,7 +6,12 @@ from telegram.ext import ContextTypes
 
 from core.ha import trigger_automation, call_service, get_ha_state
 from core.strings import t
-from bot.menu import get_main_menu_keyboard, send_main_menu, save_bot_message, delete_last_bot_message
+from bot.menu import (
+    get_main_menu_keyboard,
+    send_main_menu,
+    delete_submenu_message,
+    delete_main_menu_message,
+)
 from bot import menu_config
 
 logger = logging.getLogger(__name__)
@@ -17,6 +22,28 @@ def _resolve_title(title: str) -> str:
         value = get_ha_state(entity_id) or "?"
         title = title.replace(f"{{{entity_id}}}", value)
     return title
+
+
+async def _resend_main_menu_carrier(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send a fresh main-menu message so the ReplyKeyboard always has a recent carrier.
+
+    Mobile Telegram clients drop the persistent ReplyKeyboard once its carrier
+    message is gone (deleted or auto-purged by chat retention). Re-sending here
+    after every action keeps the keyboard alive without forcing the user to /start.
+    """
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    if chat_id is None and update.callback_query:
+        chat_id = update.callback_query.message.chat_id
+    if chat_id is None:
+        return
+
+    await delete_main_menu_message(update, context)
+    msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=t("main_menu_header"),
+        reply_markup=get_main_menu_keyboard(),
+    )
+    context.user_data["main_menu_msg_id"] = msg.message_id
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -33,12 +60,14 @@ async def _show_submenu(update: Update, context: ContextTypes.DEFAULT_TYPE, labe
     ]
     keyboard.append([InlineKeyboardButton(t("back_button"), callback_data="zurueck_hauptmenue")])
     msg = await update.message.reply_text(title, reply_markup=InlineKeyboardMarkup(keyboard))
-    await save_bot_message(context, msg)
+    context.user_data["submenu_msg_id"] = msg.message_id
 
 
 async def handle_main_menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     label = update.message.text
-    await delete_last_bot_message(update, context)
+    # Only drop the previous submenu — keep the main-menu carrier so the
+    # ReplyKeyboard never loses its anchor.
+    await delete_submenu_message(update, context)
 
     menu = menu_config.get_menu(label)
     if menu is None:
@@ -56,12 +85,8 @@ async def zurueck_hauptmenue_callback(update: Update, context: ContextTypes.DEFA
         await query.message.delete()
     except Exception:
         pass
-    msg = await context.bot.send_message(
-        chat_id=query.message.chat_id,
-        text=t("main_menu_header"),
-        reply_markup=get_main_menu_keyboard(),
-    )
-    context.user_data["last_bot_msg_id"] = msg.message_id
+    context.user_data.pop("submenu_msg_id", None)
+    await _resend_main_menu_carrier(update, context)
 
 
 async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -80,4 +105,7 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         call_service(domain, action, btn["entity_id"])
 
     await query.edit_message_text(btn.get("response", t("executed")))
-    context.user_data["last_bot_msg_id"] = query.message.message_id
+    # The edited message becomes a static confirmation — drop our submenu
+    # tracking and refresh the ReplyKeyboard carrier.
+    context.user_data.pop("submenu_msg_id", None)
+    await _resend_main_menu_carrier(update, context)

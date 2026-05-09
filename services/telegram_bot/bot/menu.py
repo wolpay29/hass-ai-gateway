@@ -9,22 +9,24 @@ from core.strings import t
 logger = logging.getLogger(__name__)
 
 
-async def delete_last_bot_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if "last_bot_msg_id" not in context.user_data:
+async def _delete_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, key: str):
+    msg_id = context.user_data.pop(key, None)
+    if not msg_id:
         return
     try:
-        await context.bot.delete_message(
-            chat_id=update.effective_chat.id,
-            message_id=context.user_data["last_bot_msg_id"],
-        )
+        await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
     except Exception as e:
-        logger.warning(f"Could not delete message: {e}")
-    finally:
-        context.user_data.pop("last_bot_msg_id", None)
+        logger.debug(f"Could not delete message {key}={msg_id}: {e}")
 
 
-async def save_bot_message(context: ContextTypes.DEFAULT_TYPE, message):
-    context.user_data["last_bot_msg_id"] = message.message_id
+async def delete_submenu_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat:
+        await _delete_message(context, update.effective_chat.id, "submenu_msg_id")
+
+
+async def delete_main_menu_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat:
+        await _delete_message(context, update.effective_chat.id, "main_menu_msg_id")
 
 
 def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
@@ -35,29 +37,30 @@ def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
 
 
 async def send_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, is_startup=False):
-    if not is_startup and update.effective_chat:
-        await delete_last_bot_message(update, context)
+    """Send a fresh main-menu message carrying the ReplyKeyboard.
 
-    reply_markup = get_main_menu_keyboard()
+    Always sends a new message (rather than editing) so the ReplyKeyboard's
+    carrier message is fresh — important when the chat auto-deletes history.
+    """
+    chat_id = update.effective_chat.id if update.effective_chat else MY_CHAT_ID
+
+    # Replace any previous main-menu carrier so we don't pile up duplicates.
+    if not is_startup:
+        await delete_submenu_message(update, context)
+        await delete_main_menu_message(update, context)
+
+    msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=t("main_menu_header"),
+        reply_markup=get_main_menu_keyboard(),
+    )
+    context.user_data["main_menu_msg_id"] = msg.message_id
 
     if update.callback_query:
-        msg = await update.callback_query.message.reply_text(
-            t("main_menu_header"),
-            reply_markup=reply_markup,
-        )
         try:
             await update.callback_query.answer()
         except Exception:
             pass
-    elif update.message:
-        msg = await update.message.reply_text(
-            t("main_menu_header"),
-            reply_markup=reply_markup,
-        )
-    else:
-        return
-
-    await save_bot_message(context, msg)
 
 
 async def startup_menu(app: Application):
