@@ -30,9 +30,9 @@ primary_parser: |-
 
   Actions:
   - "turn_on" / "turn_off" / "toggle": control device (light, switch)
-  - "trigger": run automation (gate, pool pump)
+  - "trigger": run automation
   - Parameterised actions with "service_data": set_temperature, set_cover_position, set_hvac_mode, turn_on (with brightness), set_percentage:
-    {{"entity_id":"climate.pool","action":"set_temperature","domain":"climate","service_data":{{"temperature":23}}}}
+    {{"entity_id":"climate.example_thermostat","action":"set_temperature","domain":"climate","service_data":{{"temperature":21}}}}
   - "needs_fallback": when the required entity is NOT in the list above, or when you need data for the command that is missing here. Also when the user asks for the position/level/percent of a device whose entity type cannot deliver that (e.g. a roller blind exposed as a switch). Provide the entity_id as best you can or leave it empty.
 
   Status questions:
@@ -41,13 +41,13 @@ primary_parser: |-
   Clarification when uncertain:
   If the request does not point unambiguously at concrete entity(s) (e.g. "turn on the light" with no room/person), DO NOT GUESS. Return actions: [] and set "clarification_question" — short, casual, max 2 options by short name.
   ALWAYS as JSON — never plain text as a reply, not even for clarifications!
-  Example: {{"reply":"Which blinds do you mean?","actions":[],"clarification_question":"Upstairs or downstairs?"}}
+  Example: {{"reply":"Which device do you mean?","actions":[],"clarification_question":"Option A or Option B?"}}
 
   Plural / "all":
   Plural alone ("the blinds", "the lights") is NOT permission to switch all entities. Only operate multiple entities when the user names them individually, uses a universal quantifier ("all", "every", "everywhere"), or names a clearly bounded area. Otherwise clarification_question.
 
   Prefer group entities:
-  If an entry already switches an entire group (recognisable by description/note: "All ... downstairs", "All blinds upstairs", ...) and the area the user means matches it: pick ONLY that one entity, do not additionally fan out to individuals.
+  If an entry already switches an entire group (recognisable by description/note: "All ... in <area>", "All <devices> <area>", ...) and the area the user means matches it: pick ONLY that one entity, do not additionally fan out to individuals.
 
   Execution status in history:
   When you see entries in the conversation history of the form
@@ -64,7 +64,7 @@ primary_parser: |-
   - entity_id MUST come exactly from the device list above. Never invent! For everything else: "needs_fallback".
   - "domain" is the part before the dot of the entity_id.
   - Pay attention to the optional "note" field as a hint.
-  - Room assignment: if the "note" field contains "Area: X", the entity belongs to area X. If this is missing, the area may still be implied by entity_id or friendly_name (e.g. "light.paul_light" = Paul's light). A missing "Area:" is NOT an exclusion — keep using entity_id/friendly_name as usual.
+  - Room assignment: if the "note" field contains "Area: X", the entity belongs to area X. If this is missing, the area may still be implied by entity_id or friendly_name (e.g. "light.kitchen_ceiling" = kitchen ceiling light). A missing "Area:" is NOT an exclusion — keep using entity_id/friendly_name as usual.
 
 # 2) RAG parser: pre-filtered entities with live states, attributes, and explicit actions.
 #    You receive the live values directly — no separate status query needed.
@@ -86,7 +86,7 @@ rag_parser: |-
   {{"reply":"...", "actions":[{{"entity_id":"...","action":"...","domain":"..."}}]}}
 
   With parameters (e.g. temperature, brightness, position):
-  {{"reply":"...", "actions":[{{"entity_id":"climate.pool","action":"set_temperature","domain":"climate","service_data":{{"temperature":23}}}}]}}
+  {{"reply":"...", "actions":[{{"entity_id":"climate.example_thermostat","action":"set_temperature","domain":"climate","service_data":{{"temperature":21}}}}]}}
 
   Status question (value already present):
   {{"reply":"It is currently 18.2 °C outside.","actions":[]}}
@@ -102,7 +102,7 @@ rag_parser: |-
   "turn on the light" with no room/person), DO NOT GUESS. Return actions: []
   and set "clarification_question" — short, casual, max 2 options by short name.
   ALWAYS as JSON — never plain text as a reply, not even for clarifications!
-  Example: {{"reply":"Which blinds do you mean?","actions":[],"clarification_question":"Upstairs or downstairs?"}}
+  Example: {{"reply":"Which device do you mean?","actions":[],"clarification_question":"Option A or Option B?"}}
 
   Plural / "all":
   Plural alone ("the blinds", "the lights") is NOT permission to switch all
@@ -112,7 +112,7 @@ rag_parser: |-
 
   Prefer group entities:
   If a candidate already switches an entire group (recognisable by
-  description/friendly_name/note: "All ... downstairs", "All blinds upstairs",
+  description/friendly_name/note: "All ... in <area>", "All <devices> <area>",
   ...) and the area the user means matches it: pick ONLY that one entity, do
   not additionally fan out to individuals. Never abuse off-groups for turning
   things on.
@@ -139,8 +139,9 @@ rag_parser: |-
   - Pay attention to the optional "note" field as a hint.
   - Room assignment: if the "note" field contains "Area: X", the entity belongs
     to area X. If this is missing, the area may still be implied by entity_id
-    or friendly_name (e.g. "light.paul_light" = Paul's light). A missing
-    "Area:" is NOT an exclusion — keep using entity_id and friendly_name as usual.
+    or friendly_name (e.g. "light.kitchen_ceiling" = kitchen ceiling light).
+    A missing "Area:" is NOT an exclusion — keep using entity_id and
+    friendly_name as usual.
 
   Execution status in history:
   When you see entries in the conversation history of the form
@@ -181,7 +182,7 @@ fallback_rest: |-
   - "turn_on" / "turn_off" / "toggle" for light/switch/cover
   - "trigger" for automation
   - Parameterised actions (set_temperature, set_cover_position, set_hvac_mode, turn_on with brightness, ...) with "service_data" for the values:
-    {{"entity_id":"climate.pool","action":"set_temperature","domain":"climate","service_data":{{"temperature":23}}}}
+    {{"entity_id":"climate.example_thermostat","action":"set_temperature","domain":"climate","service_data":{{"temperature":21}}}}
 
   IMPORTANT: entity_id MUST come exactly from the live list above. Never invent!
   "domain" is the part before the dot of the entity_id.
@@ -208,7 +209,7 @@ query_rewriter: |-
       "command"   — the user wants to control a device, query a state,
                     trigger an automation, or responds to an assistant
                     clarification with a concrete answer that implies an
-                    action (e.g. "light on", "how warm is the pool",
+                    action (e.g. "light on", "how warm is it outside",
                     "the one in the living room", "yes the first").
       "smalltalk" — chit-chat, greeting, general question without device
                     reference, or a reaction to assistant smalltalk
@@ -229,11 +230,11 @@ query_rewriter: |-
           original text there.
 
   Examples:
-    Request: "turn on the light at paul's"
-    -> {{"intent":"command","query":"turn on light at paul"}}
+    Request: "turn on the kitchen light"
+    -> {{"intent":"command","query":"turn on light in kitchen"}}
 
-    Request: "and off again"  (history: User: light at paul on)
-    -> {{"intent":"command","query":"turn off light at paul"}}
+    Request: "and off again"  (history: User: light in kitchen on)
+    -> {{"intent":"command","query":"turn off light in kitchen"}}
 
     Request: "hi how are you?"
     -> {{"intent":"smalltalk","query":"hi how are you"}}

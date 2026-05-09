@@ -63,7 +63,7 @@ _RAG_ENRICH_MAX_WORDS = 5
 #     "transcript":       str,            # the input transcript
 #     "reply":            str,            # final natural-language reply (may be empty)
 #     "actions_executed": [                # actions that were actually sent to HA
-#       {"action": "turn_on", "entity_id": "light.paul", "success": True},
+#       {"action": "turn_on", "entity_id": "light.kueche", "success": True},
 #       ...
 #     ],
 #     "actions_ignored":  [                # actions dropped by MAX_ACTIONS_PER_COMMAND

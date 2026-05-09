@@ -159,23 +159,32 @@ blacklist:
 
 ---
 
-## Memory files
+## Memory files — your per-setup tuning
 
-Edit via **File Editor** or **Samba** at `/addon_configs/<slug>/userconfig/`.
+The built-in prompts only cover the universal Home Assistant contract (JSON shape, action names, domains, service-data parameters). Anything specific to **your** house — names of people, floor labels, nicknames for devices, recurring STT errors — belongs in two editable files instead of in the code:
 
-- **`pre_llm_memory.md`** — injected before the RAG search (query rewriter). Use for recurring STT corrections and pronoun rules.
-- **`post_llm_memory.md`** — appended to every parser prompt. Use for preferences and never-do rules.
+Edit via **File Editor** or **Samba** at `/addon_configs/<slug>/userconfig/`:
 
-Content inside `<!-- ... -->` is ignored by the gateway.
+- **`pre_llm_memory.md`** — appended to the query rewriter, runs **before** the RAG search. Right place for STT corrections, alternative spellings, household-specific pronoun rules.
+- **`post_llm_memory.md`** — appended to every parser prompt. Right place for selection preferences, area-mapping rules, and never-do rules.
+
+Both files ship with example blocks wrapped in `<!-- ... -->`. Anything inside those markers is ignored — copy the snippets you need outside the markers and adjust them for your home, or replace the file entirely. Add-on updates do not overwrite your edits.
 
 ```markdown
 ## STT corrections
-- "livingroom" → living room
-- "pump" without context → garden pump
+- "livingroom", "lvng room" -> "living room"
+- "pump" without context -> garden irrigation pump
 
-## Rules
+## Selection rules
+- "all off" -> only switch group entities, do not fan out.
+- "Rollo Paul" -> the blind IN Paul's room, not a person named Paul.
+
+## Floors / areas
+- "upstairs", "OG" -> entities with Area="OG"
+- "downstairs", "EG" -> entities with Area="EG"
+
+## Never do
 - Never trigger automation.vacation_mode without asking first.
-- If user says "all off", prefer group entities.
 ```
 
 After editing: restart the add-on.

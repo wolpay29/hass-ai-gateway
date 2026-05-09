@@ -135,7 +135,7 @@ LLM_PREPROCESSOR_TEMPERATURE = float(os.getenv("LLM_PREPROCESSOR_TEMPERATURE", "
 HISTORY_INCLUDE_ASSISTANT = os.getenv("HISTORY_INCLUDE_ASSISTANT", "true").lower() == "true"
 
 # UNIVERSAL (both RAG modes): if true, the execution summary
-# ("ausgefuehrt: turn_on -> light.licht_paul, ...") is appended to the stored
+# ("ausgefuehrt: turn_on -> light.kueche_decke, ...") is appended to the stored
 # assistant turn. Requires HISTORY_INCLUDE_ASSISTANT=true — otherwise there is
 # no assistant turn to append to.
 HISTORY_APPEND_EXECUTIONS = os.getenv("HISTORY_APPEND_EXECUTIONS", "false").lower() == "true"

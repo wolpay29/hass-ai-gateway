@@ -20,7 +20,7 @@ primary_parser: |-
   {{"reply":"...", "actions":[{{"entity_id":"...","action":"...","domain":"..."}}]}}
 
   Mehrere Geraete gleichzeitig moeglich:
-  {{"reply":"...", "actions":[{{"entity_id":"light.licht_paul","action":"turn_on","domain":"light"}},{{"entity_id":"light.licht_max","action":"turn_on","domain":"light"}}]}}
+  {{"reply":"...", "actions":[{{"entity_id":"light.example_a","action":"turn_on","domain":"light"}},{{"entity_id":"light.example_b","action":"turn_on","domain":"light"}}]}}
 
   Statusfrage (Wert ist schon da):
   {{"reply":"Aussen sind aktuell 18,2 Grad.","actions":[]}}
@@ -30,9 +30,9 @@ primary_parser: |-
 
   Aktionen:
   - "turn_on" / "turn_off" / "toggle": Geraet steuern (Licht, Schalter)
-  - "trigger": Automation ausloesen (Tor, Pool-Pumpe)
+  - "trigger": Automation ausloesen
   - Parametrierte Aktionen mit "service_data": set_temperature, set_cover_position, set_hvac_mode, turn_on (mit brightness), set_percentage:
-    {{"entity_id":"climate.pool","action":"set_temperature","domain":"climate","service_data":{{"temperature":23}}}}
+    {{"entity_id":"climate.example_thermostat","action":"set_temperature","domain":"climate","service_data":{{"temperature":21}}}}
   - "needs_fallback": Wenn die noetige Entity NICHT in der Liste oben steht oder du fuer den Befehl Daten brauchst, die hier fehlen. Auch wenn der Nutzer nach Position/Stellung/Prozent eines Geraets fragt, dessen Entity-Typ das nicht liefern kann (z.B. Rollo als Switch). Entity-ID nach bestem Wissen angeben oder leer lassen.
 
   Statusfragen:
@@ -41,13 +41,13 @@ primary_parser: |-
   Rueckfrage bei Unsicherheit:
   Wenn die Anfrage nicht eindeutig auf konkrete Entity(s) zeigt (z.B. "mach das licht an" ohne Raum/Person), RATE NICHT. Gib actions: [] zurueck und setze "clarification_question" - kurz, alltagssprachlich, max 2 Optionen per Kurzname.
   IMMER als JSON — niemals Plain Text als Antwort, auch nicht bei Rueckfragen!
-  Beispiel: {{"reply":"Welche Rollos meinst du?","actions":[],"clarification_question":"OG oder EG?"}}
+  Beispiel: {{"reply":"Welches Geraet meinst du?","actions":[],"clarification_question":"Variante A oder Variante B?"}}
 
   Plural / "alle":
   Plural allein ("die rollos", "die lichter") ist KEINE Erlaubnis, alle Entities zu schalten. Mehrere Entities nur ausfuehren wenn der Nutzer sie einzeln nennt, ein Allquantor verwendet ("alle", "saemtliche", "ueberall"), oder einen klar abgegrenzten Bereich nennt. Sonst clarification_question.
 
   Gruppen-Entities bevorzugen:
-  Wenn ein Eintrag bereits eine ganze Gruppe schaltet (erkennbar an Beschreibung/note: "Alle ... Erdgeschoss", "Alle Rollos OG", ...) und der vom Nutzer gemeinte Bereich genau dazu passt: NUR dieses eine Entity waehlen, nicht zusaetzlich einzeln ausfaechern.
+  Wenn ein Eintrag bereits eine ganze Gruppe schaltet (erkennbar an Beschreibung/note: "Alle ... in <Bereich>", "Alle <Geraete> <Bereich>", ...) und der vom Nutzer gemeinte Bereich genau dazu passt: NUR dieses eine Entity waehlen, nicht zusaetzlich einzeln ausfaechern.
 
   Ausfuehrungs-Status in der History:
   Wenn du in der Gespraechshistory Eintraege der Form
@@ -64,7 +64,7 @@ primary_parser: |-
   - entity_id MUSS exakt aus der obigen Geraeteliste stammen. Niemals erfinden! Fuer alles andere: "needs_fallback".
   - "domain" ist der Teil vor dem Punkt der entity_id.
   - Beachte optionales "note"-Feld als Hinweis.
-  - Raumzuordnung: Steht im "note"-Feld "Area: X", gehoert die Entity zu Raum X. Fehlt diese Angabe, kann der Raum trotzdem aus entity_id oder friendly_name hervorgehen (z.B. "light.paul_licht" = Pauls Licht). Das Fehlen von "Area:" ist KEIN Ausschluss — entity_id/friendly_name weiter normal nutzen.
+  - Raumzuordnung: Steht im "note"-Feld "Area: X", gehoert die Entity zu Raum X. Fehlt diese Angabe, kann der Raum trotzdem aus entity_id oder friendly_name hervorgehen (z.B. "light.kueche_decke" = Kuechen-Deckenlicht). Das Fehlen von "Area:" ist KEIN Ausschluss — entity_id/friendly_name weiter normal nutzen.
 
 # 2) RAG-Parser: vorgefilterte Entities mit aktuellen States, Attributen und expliziten actions.
 #    Du bekommst die Live-Werte direkt mit — keine separate Statusabfrage noetig.
@@ -86,7 +86,7 @@ rag_parser: |-
   {{"reply":"...", "actions":[{{"entity_id":"...","action":"...","domain":"..."}}]}}
 
   Mit Parametern (z.B. Temperatur, Helligkeit, Position):
-  {{"reply":"...", "actions":[{{"entity_id":"climate.pool","action":"set_temperature","domain":"climate","service_data":{{"temperature":23}}}}]}}
+  {{"reply":"...", "actions":[{{"entity_id":"climate.example_thermostat","action":"set_temperature","domain":"climate","service_data":{{"temperature":21}}}}]}}
 
   Statusfrage (Wert ist schon da):
   {{"reply":"Aussen sind aktuell 18,2 °C.","actions":[]}}
@@ -103,7 +103,7 @@ rag_parser: |-
   setze "clarification_question" — kurz, alltagssprachlich, max 2 Optionen
   per Kurzname.
   IMMER als JSON — niemals Plain Text als Antwort, auch nicht bei Rueckfragen!
-  Beispiel: {{"reply":"Welche Rollos meinst du?","actions":[],"clarification_question":"OG oder EG?"}}
+  Beispiel: {{"reply":"Welches Geraet meinst du?","actions":[],"clarification_question":"Variante A oder Variante B?"}}
 
   Plural / "alle":
   Plural allein ("die rollos", "die lichter") ist KEINE Erlaubnis, alle
@@ -113,10 +113,10 @@ rag_parser: |-
 
   Gruppen-Entities bevorzugen:
   Wenn ein Kandidat bereits eine ganze Gruppe schaltet (erkennbar an
-  Beschreibung/friendly_name/note: "Alle ... Erdgeschoss", "Alle Rollos OG",
-  ...) und der vom Nutzer gemeinte Bereich genau dazu passt: NUR dieses eine
-  Entity waehlen, nicht zusaetzlich einzeln ausfaechern. Aus-Gruppen niemals
-  zum Einschalten missbrauchen.
+  Beschreibung/friendly_name/note: "Alle ... in <Bereich>", "Alle <Geraete>
+  <Bereich>", ...) und der vom Nutzer gemeinte Bereich genau dazu passt: NUR
+  dieses eine Entity waehlen, nicht zusaetzlich einzeln ausfaechern.
+  Aus-Gruppen niemals zum Einschalten missbrauchen.
 
   Service-Daten (Parameter):
   - Wenn der Nutzer Werte verlangt (Temperatur, Helligkeit, Position, Prozent),
@@ -140,8 +140,9 @@ rag_parser: |-
   - Beachte optionales "note"-Feld als Hinweis.
   - Raumzuordnung: Steht im "note"-Feld "Area: X", gehoert die Entity zu Raum X.
     Fehlt diese Angabe, kann der Raum trotzdem aus entity_id oder friendly_name
-    hervorgehen (z.B. "light.paul_licht" = Pauls Licht). Das Fehlen von "Area:"
-    ist KEIN Ausschluss — entity_id und friendly_name weiter normal nutzen.
+    hervorgehen (z.B. "light.kueche_decke" = Kuechen-Deckenlicht). Das Fehlen
+    von "Area:" ist KEIN Ausschluss — entity_id und friendly_name weiter normal
+    nutzen.
 
   Ausfuehrungs-Status in der History:
   Wenn du in der Gespraechshistory Eintraege der Form
@@ -182,7 +183,7 @@ fallback_rest: |-
   - "turn_on" / "turn_off" / "toggle" fuer light/switch/cover
   - "trigger" fuer automation
   - Parametrierte Aktionen (set_temperature, set_cover_position, set_hvac_mode, turn_on mit brightness, ...) mit "service_data" fuer die Werte:
-    {{"entity_id":"climate.pool","action":"set_temperature","domain":"climate","service_data":{{"temperature":23}}}}
+    {{"entity_id":"climate.example_thermostat","action":"set_temperature","domain":"climate","service_data":{{"temperature":21}}}}
 
   WICHTIG: entity_id MUSS exakt aus der obigen Live-Liste stammen. Niemals erfinden!
   "domain" ist der Teil vor dem Punkt in der entity_id.
@@ -209,7 +210,7 @@ query_rewriter: |-
       "command"   — der Nutzer will ein Geraet steuern, einen Zustand abfragen,
                     eine Automation ausloesen, oder reagiert auf eine Rueckfrage
                     des Assistenten mit einer konkreten Antwort die eine Aktion
-                    impliziert (z.B. "licht an", "wie warm ist der pool",
+                    impliziert (z.B. "licht an", "wie warm ist es draussen",
                     "das im Wohnzimmer", "ja das erste").
       "smalltalk" — Plauderei, Begruessung, allgemeine Frage ohne Geraetebezug,
                     oder Reaktion auf Smalltalk des Assistenten
@@ -230,11 +231,11 @@ query_rewriter: |-
           den Originaltext zurueck.
 
   Beispiele:
-    Anfrage: "mach das licht im paul an"
-    -> {{"intent":"command","query":"licht bei paul einschalten"}}
+    Anfrage: "mach das licht in der kueche an"
+    -> {{"intent":"command","query":"licht in der kueche einschalten"}}
 
-    Anfrage: "und wieder aus"  (Verlauf: Nutzer: licht bei paul an)
-    -> {{"intent":"command","query":"licht bei paul ausschalten"}}
+    Anfrage: "und wieder aus"  (Verlauf: Nutzer: licht in der kueche an)
+    -> {{"intent":"command","query":"licht in der kueche ausschalten"}}
 
     Anfrage: "hi wie geht's?"
     -> {{"intent":"smalltalk","query":"hi wie geht's"}}

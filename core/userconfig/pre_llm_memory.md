@@ -2,37 +2,39 @@
 Pre-LLM Memory (Query-Rewriter)
 ================================
 
-Wird VOR der RAG-Suche an den Rewriter-Prompt angehaengt.
-Hier kommen Hinweise rein, die dem Rewriter helfen, Tippfehler / STT-Fehler /
+Wird VOR der RAG-Suche an den Rewriter-Prompt angehaengt. Hier kommen
+Hinweise rein, die dem Rewriter helfen, Tippfehler / STT-Fehler /
 Pronomen besser aufzuloesen — BEVOR die Embedding-Suche laeuft.
 
-WICHTIG: Alles, was zwischen den HTML-Kommentar-Tags steht, wird IGNORIERT
-(damit ein unveraendertes Template-File leer wirkt). Echte Hinweise daher
-AUSSERHALB der Kommentar-Tags schreiben — siehe Beispiele unten.
+Format: freier Markdown-Text. Datei darf leer sein (dann wird nichts
+angehaengt). HTML-Kommentare wie dieser werden komplett ignoriert.
 
-Format: freier Markdown-Text. Datei darf leer sein (dann wird nichts angehaengt).
+Eigene Hinweise daher AUSSERHALB der Kommentar-Tags schreiben.
+Updates des Add-ons ueberschreiben deine Anpassungen NICHT.
 -->
 
-## Personen / Raeume
+<!--
+Beispiel-Setup zum Inspirieren (Kommentar-Tags um die passenden Bloecke
+entfernen, oder Inhalt komplett anpassen):
 
-- "Paul", "Paolo", "Paule", "Pawl" -> immer "Paul" (Bewohner, hat eigenes Zimmer im Obergeschoss)
+## Personen / Raeume
+- "Paul", "Paolo", "Pawl" -> "Paul" (Bewohner mit eigenem Zimmer)
 
 ## Haeufige STT-Fehler bei Geraeten
-
-- "Rolladen", "Rolllade", "Rollade", "Roland" wenn Geraetebezug -> "Rolladen"
+- "Rolladen", "Rollade", "Roland" wenn Geraetebezug -> "Rolladen"
 - "Jalousie", "Schalousie" -> "Jalousie"
-- "Wallbox", "Wallbocks", "Wollbox" -> "Wallbox"
-- "Photovoltaik", "Fotovoltaik", "Fotvoltaik" -> "Photovoltaik"
+- "Wallbox", "Wollbox" -> "Wallbox"
+- "Photovoltaik", "Fotovoltaik" -> "Photovoltaik"
 - "Wechselrichter", "Wechselrichtet" -> "Wechselrichter"
 - "Vorlauftemperatur", "Vorlauf-Temperatur" -> "Vorlauftemperatur"
-- "Fussboden", "Fussbodenheizung", "Fussboeden" -> "Fussbodenheizung"
+- "Fussbodenheizung", "Fussboeden" -> "Fussbodenheizung"
 - "Waermepumpe", "Wermepumpe", "Waermepump" -> "Waermepumpe"
 
-## Pool
-
+## Setup-Begriffe
 - "Pool", "Pull", "Poul" -> "Pool"
-- "Pool-Pumpe", "Poolpumpe", "Bullpumpe" -> "Pool-Pumpe"
+- "Pool-Pumpe", "Bullpumpe" -> "Pool-Pumpe"
 
 ## Allgemein
-
-- Wiederholungen im Transcript (z.B. "Mach das Licht an. Mach das Licht an.") -> nur einmal verwenden, Duplikate ignorieren
+- Wiederholungen im Transcript ("Mach das Licht an. Mach das Licht an.")
+  -> nur einmal verwenden, Duplikate ignorieren
+-->

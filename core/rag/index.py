@@ -190,7 +190,7 @@ def _make_embed_text(
     """Build the text that gets embedded.
 
     Only fields relevant for RETRIEVAL go here:
-      - entity_id (often contains meaningful tokens: 'pool_pump', 'licht_paul')
+      - entity_id (often contains meaningful tokens: 'kitchen_ceiling', 'garden_pump')
       - friendly_name (HA's human-readable name)
       - unit (helps queries like 'wie viele kWh' find sensors with kWh unit)
       - area (HA-configured room/area name, when available)

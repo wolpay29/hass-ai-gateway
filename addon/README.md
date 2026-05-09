@@ -38,7 +38,7 @@ The full stack (LM Studio + Whisper + TTS + embedding) runs on a single machine:
    - `whisper` → `url` (leave empty for text-only use)
 4. **Start** the add-on.
 
-See the **Documentation** tab for the full reference including entities.yaml, RAG setup, and automation examples.
+See the **Documentation** tab for the full reference including entities.yaml, RAG setup, automation examples, and the per-setup memory files (`pre_llm_memory.md` / `post_llm_memory.md`) where you teach the assistant about your house — names, floors, device nicknames, recurring STT errors.
 
 ## Infrastructure
 
