@@ -45,7 +45,7 @@ It installs all dependencies and sets up the client. Configure the gateway URL a
 
 ## Installation
 
-1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories**, add `https://github.com/wolpay29/hass-ai-gateway`.
+1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories**, add `https://github.com/wolpa29/hass-ai-gateway`.
 2. Install **Hass AI Gateway** and open the **Configuration** tab.
 3. Fill in at minimum:
    - `telegram` → `bot_token` (from @BotFather), `chat_id` (your numeric Telegram user ID)

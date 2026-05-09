@@ -30,7 +30,7 @@ The full stack (LM Studio + Whisper + TTS + embedding) runs on a single machine:
 
 ## Quick start
 
-1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories**, paste `https://github.com/wolpay29/hass-ai-gateway`.
+1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories**, paste `https://github.com/wolpa29/hass-ai-gateway`.
 2. Install **Hass AI Gateway**.
 3. Open **Configuration**, fill in at minimum:
    - `telegram` → `bot_token`, `chat_id`
